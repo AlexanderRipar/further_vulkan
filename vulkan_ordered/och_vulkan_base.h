@@ -47,7 +47,7 @@ namespace och
 
 		const char* m_dev_layers[max_cnt]
 		{
-				"VK_LAYER_KHRONOS_validation",
+			"VK_LAYER_KHRONOS_validation",
 		};
 
 		uint32_t m_dev_extension_cnt = 1;
@@ -623,7 +623,15 @@ namespace och
 			VkSurfaceCapabilitiesKHR surface_capabilites;
 			check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilites));
 
-			//Actually recreate swapchain
+			// Destroy old swapchain's image views
+
+			for (uint32_t i = 0; i != m_swapchain_image_cnt; ++i)
+				vkDestroyImageView(m_device, m_swapchain_image_views[i], nullptr);
+
+			// Temporary swapchain handle
+			VkSwapchainKHR tmp_swapchain;
+
+			// Actually recreate swapchain
 
 			VkSwapchainCreateInfoKHR swapchain_ci{};
 			swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -643,26 +651,27 @@ namespace och
 			swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 			swapchain_ci.presentMode = m_swapchain_present_mode;
 			swapchain_ci.clipped = VK_TRUE; // TODO: VK_FALSE?
-			swapchain_ci.oldSwapchain = nullptr; //m_swapchain;
+			swapchain_ci.oldSwapchain = m_swapchain;
 
-			for (uint32_t i = 0; i != m_swapchain_image_cnt; ++i)
-				vkDestroyImageView(m_device, m_swapchain_image_views[i], nullptr);
+			check(vkCreateSwapchainKHR(m_device, &swapchain_ci, nullptr, &tmp_swapchain));
+
+			// Now that the new swapchain has been created, the old one can be destroyed and the new one assigned to the struct member
 
 			vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 
-			check(vkCreateSwapchainKHR(m_device, &swapchain_ci, nullptr, &m_swapchain));
+			m_swapchain = tmp_swapchain;
 
-			// Get swapchain images (and the number thereof)
+			// Get swapchain images (and the number thereof) for new swapchain
 			{
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
 				if (m_swapchain_image_cnt > max_swapchain_images)
-					return MSG_ERROR("Created swapchain contains too many images");
+					return MSG_ERROR("Recreated swapchain contains too many images");
 
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
 			}
 
-			// Create swapchain image views
+			// Create swapchain image views for new swapchain
 			{
 				for (uint32_t i = 0; i != m_swapchain_image_cnt; ++i)
 				{
@@ -684,212 +693,9 @@ namespace och
 				}
 			}
 
-			// Delete old swapchain
-
-			//vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
-
 			return {};
 		}
 	};
-
-	/*
-	struct swapchain_context
-	{
-		static constexpr uint32_t max_images = 8;
-
-		VkFormat m_format;
-
-		VkColorSpaceKHR m_colorspace;
-
-		VkPresentModeKHR m_present_mode;
-
-		VkExtent2D m_extent;
-
-		uint32_t m_image_cnt;
-
-		VkImage m_images[max_images]{};
-
-		VkImageView m_image_views[max_images]{};
-
-		VkSwapchainKHR m_swapchain;
-
-		err_info create (const vulkan_context& context) noexcept
-		{
-			// Get swapchain settings supported by context
-			{
-				uint32_t format_cnt;
-				check(vkGetPhysicalDeviceSurfaceFormatsKHR(context.m_physical_device, context.m_surface, &format_cnt, nullptr));
-				och::heap_buffer<VkSurfaceFormatKHR> formats(format_cnt);
-				check(vkGetPhysicalDeviceSurfaceFormatsKHR(context.m_physical_device, context.m_surface, &format_cnt, formats.data()));
-
-				m_format = formats[0].format;
-				m_colorspace = formats[0].colorSpace;
-				for (uint32_t i = 0; i != format_cnt; ++i)
-					if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
-					{
-						m_format = formats[i].format;
-						m_colorspace = formats[i].colorSpace;
-
-						break;
-					}
-
-				uint32_t present_mode_cnt;
-				check(vkGetPhysicalDeviceSurfacePresentModesKHR(context.m_physical_device, context.m_surface, &present_mode_cnt, nullptr));
-				och::heap_buffer<VkPresentModeKHR> present_modes(present_mode_cnt);
-				check(vkGetPhysicalDeviceSurfacePresentModesKHR(context.m_physical_device, context.m_surface, &present_mode_cnt, present_modes.data()));
-
-				m_present_mode = VK_PRESENT_MODE_FIFO_KHR;
-				for (uint32_t i = 0; i != present_mode_cnt; ++i)
-					if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) // TODO: VK_PRESENT_MODE_IMMEDIATE_KHR
-					{
-						m_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-
-						break;
-					}
-			}
-
-			// Get surface's capabilites
-
-			VkSurfaceCapabilitiesKHR surface_capabilites;
-			check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.m_physical_device, context.m_surface, &surface_capabilites));
-
-			// Choose initial swapchain extent
-			{
-				if (surface_capabilites.currentExtent.width == ~0u)
-				{
-					uint32_t width, height;
-					glfwGetFramebufferSize(context.m_window, reinterpret_cast<int*>(&width), reinterpret_cast<int*>(&height));
-
-					m_extent.width = och::clamp(width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
-					m_extent.height = och::clamp(height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
-				}
-				else
-					m_extent = surface_capabilites.currentExtent;
-			}
-
-			// Create swapchain
-			{
-				// Choose image count
-				uint32_t requested_img_cnt = surface_capabilites.minImageCount + 1;
-
-				if (surface_capabilites.minImageCount == max_images || surface_capabilites.maxImageCount == surface_capabilites.minImageCount)
-					--requested_img_cnt;
-				else if (surface_capabilites.minImageCount > max_images)
-					return MSG_ERROR("Minimum number of images supported by swapchain exceeds engine's maximum");
-
-				VkSwapchainCreateInfoKHR swapchain_ci{};
-				swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-				swapchain_ci.pNext = nullptr;
-				swapchain_ci.flags = 0;
-				swapchain_ci.surface = context.m_surface;
-				swapchain_ci.minImageCount = requested_img_cnt;
-				swapchain_ci.imageFormat = m_format;
-				swapchain_ci.imageColorSpace = m_colorspace;
-				swapchain_ci.imageExtent = m_extent;
-				swapchain_ci.imageArrayLayers = 1;
-				swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-				swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-				swapchain_ci.queueFamilyIndexCount = 0;
-				swapchain_ci.pQueueFamilyIndices = nullptr;
-				swapchain_ci.preTransform = surface_capabilites.currentTransform;
-				swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-				swapchain_ci.presentMode = m_present_mode;
-				swapchain_ci.clipped = VK_TRUE; // TODO: VK_FALSE?
-				swapchain_ci.oldSwapchain = nullptr;
-
-				VkResult create_rst = vkCreateSwapchainKHR(context.m_device, &swapchain_ci, nullptr, &m_swapchain);
-
-				check(create_rst);
-			}
-
-			// Get swapchain images (and the number thereof)
-			{
-				check(vkGetSwapchainImagesKHR(context.m_device, m_swapchain, &m_image_cnt, nullptr));
-
-				if (m_image_cnt > max_images)
-					return MSG_ERROR("Created swapchain contains too many images");
-
-				check(vkGetSwapchainImagesKHR(context.m_device, m_swapchain, &m_image_cnt, m_images));
-			}
-
-			// Create swapchain image views
-			{
-				for (uint32_t i = 0; i != m_image_cnt; ++i)
-				{
-					VkImageViewCreateInfo imview_ci{};
-					imview_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-					imview_ci.pNext = nullptr;
-					imview_ci.flags = 0;
-					imview_ci.image = m_images[i];
-					imview_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-					imview_ci.format = m_format;
-					imview_ci.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY };
-					imview_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					imview_ci.subresourceRange.baseMipLevel = 0;
-					imview_ci.subresourceRange.levelCount = 1;
-					imview_ci.subresourceRange.baseArrayLayer = 0;
-					imview_ci.subresourceRange.layerCount = 1;
-
-					check(vkCreateImageView(context.m_device, &imview_ci, nullptr, &m_image_views[i]));
-				}
-			}
-
-			return {};
-		}
-
-		void destroy(const vulkan_context& context) noexcept
-		{
-			for (uint32_t i = 0; i != m_image_cnt; ++i)
-				vkDestroyImageView(context.m_device, m_image_views[i], nullptr);
-
-			vkDestroySwapchainKHR(context.m_device, m_swapchain, nullptr);
-		}
-
-		err_info recreate(const vulkan_context& context)
-		{
-			// Get current window size
-
-			glfwGetFramebufferSize(context.m_window, reinterpret_cast<int*>(&m_extent.width), reinterpret_cast<int*>(&m_extent.height));
-
-			// Get surface capabilities for current pre-transform
-
-			VkSurfaceCapabilitiesKHR surface_capabilites;
-			check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.m_physical_device, context.m_surface, &surface_capabilites));
-
-			//Actually recreate swapchain
-
-			VkSwapchainCreateInfoKHR swapchain_ci{};
-			swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-			swapchain_ci.pNext = nullptr;
-			swapchain_ci.flags = 0;
-			swapchain_ci.surface = context.m_surface;
-			swapchain_ci.minImageCount = m_image_cnt;
-			swapchain_ci.imageFormat = m_format;
-			swapchain_ci.imageColorSpace = m_colorspace;
-			swapchain_ci.imageExtent = m_extent;
-			swapchain_ci.imageArrayLayers = 1;
-			swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-			swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			swapchain_ci.queueFamilyIndexCount = 0;
-			swapchain_ci.pQueueFamilyIndices = nullptr;
-			swapchain_ci.preTransform = surface_capabilites.currentTransform;
-			swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-			swapchain_ci.presentMode = m_present_mode;
-			swapchain_ci.clipped = VK_TRUE; // TODO: VK_FALSE?
-			swapchain_ci.oldSwapchain = m_swapchain;
-
-			VkSwapchainKHR tmp_swapchain;
-
-			check(vkCreateSwapchainKHR(context.m_device, &swapchain_ci, nullptr, &tmp_swapchain));
-
-			// Delete old swapchain
-
-			vkDestroySwapchainKHR(context.m_device, m_swapchain, nullptr);
-
-			m_swapchain = tmp_swapchain;
-		}
-	};
-	*/
 
 	void vulkan_context_resize_callback(GLFWwindow* window, int width, int height)
 	{
@@ -897,4 +703,33 @@ namespace och
 
 		reinterpret_cast<vulkan_context*>(glfwGetWindowUserPointer(window))->flags.framebuffer_resized = true;
 	}
+
+	struct renderpass
+	{
+		VkRenderPass m_renderpass;
+
+		err_info create(vulkan_context& context)
+		{
+			// Create render pass
+			{
+				VkAttachmentDescription color_attachment{};
+				color_attachment.flags = 0;
+				color_attachment.format = context.m_swapchain_format;
+				color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+				color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+				color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+				color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+				color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+				color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+				color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			}
+
+			return {};
+		}
+
+		void destroy()
+		{
+
+		}
+	};
 }

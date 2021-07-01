@@ -69,9 +69,7 @@ struct swapchain_support_details
 
 struct uniform_buffer_obj
 {
-	och::mat4 model;
-	och::mat4 view;
-	och::mat4 projection;
+	och::mat4 transform;
 };
 
 struct vertex
@@ -1606,14 +1604,10 @@ struct hello_vulkan
 
 		uniform_buffer_obj ubo;
 
-		//ubo.model = glm::rotate(glm::mat4(1.0F), seconds * glm::radians(90.0F), glm::vec3(0.0F, 0.0F, 1.0F));
-		ubo.model = och::mat4::rotate_z(seconds * 0.785398F);
-
-		// ubo.view = glm::lookAt(glm::vec3(2.0F, 2.0F, 2.0F), glm::vec3(0.0F, 0.0F, 0.0F), glm::vec3(0.0F, 0.0F, 1.0F));
-		ubo.view = och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F));
-
-		// ubo.projection = glm::perspective(glm::radians(45.0F), static_cast<float>(vk_swapchain_extent.width) / vk_swapchain_extent.height, 0.1F, 10.0F); ubo.projection[1][1] *= -1;
-		ubo.projection = och::perspective(0.785398F, static_cast<float>(context.m_swapchain_extent.width) / context.m_swapchain_extent.height, 0.1F, 10.0F);
+		ubo.transform = 
+			och::perspective(0.785398F, static_cast<float>(context.m_swapchain_extent.width) / context.m_swapchain_extent.height, 0.1F, 10.0F) * 
+			och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F)) * 
+			och::mat4::rotate_z(seconds * 0.785398F);
 
 		void* uniform_data;
 
@@ -1669,14 +1663,20 @@ struct hello_vulkan
 
 int main()
 {
-	//glm::mat4 mglm = glm::perspective(0.25F, 1440.0F / 810.0F, 0.1F, 10.0F); mglm[1][1] *= -1;
-	//och::mat4 moch = och::perspective(0.25F, 1440.0F / 810.0F, 0.1F, 10.0F);
+	//glm::mat4 gm = glm::rotate(glm::mat4(1.0F), glm::radians(39.0F), glm::vec3(0.0F, 0.0F, 1.0F));
+	//och::mat4 om = och::mat4::rotate_z(glm::radians(39.0F));
 	//
-	////glm::mat4 mglm = glm::scale(glm::translate(glm::mat4(1), { 4.0F, 5.0F, 6.0F }), { 1.0F, 2.0F, 3.0F });
-	////och::mat4 moch = och::mat4::translate(4.0F, 5.0F, 6.0F) * och::mat4::scale(1.0F, 2.0F, 3.0F);
+	//glm::mat4 gv = glm::lookAt(glm::vec3(2.0F, 2.0F, 2.0F), glm::vec3(0.0F, 0.0F, 0.0F), glm::vec3(0.0F, 0.0F, 1.0F));
+	//och::mat4 ov = och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F));
 	//
-	////glm::mat4 mglm(.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, .10, .11, .12, .13, .14, .15);
-	////och::mat4 moch(.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, .10, .11, .12, .13, .14, .15);
+	//uint32_t width = 1440;
+	//uint32_t height = 810;
+	//
+	//glm::mat4 gp = glm::perspective(glm::radians(45.0F), static_cast<float>(width) / height, 0.1F, 10.0F); gp[1][1] *= -1;
+	//och::mat4 op = och::perspective(0.785398F, static_cast<float>(width) / height, 0.1F, 10.0F);
+	//
+	//glm::mat4 mglm = gp * gv * gm;
+	//och::mat4 moch = op * ov * om;
 	//
 	//och::print("glm:\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n\n", 
 	//	mglm[0][0], mglm[1][0], mglm[2][0], mglm[3][0], mglm[0][1], mglm[1][1], mglm[2][1], mglm[3][1], mglm[0][2], mglm[1][2], mglm[2][2], mglm[3][2], mglm[0][3], mglm[1][3], mglm[2][3], mglm[3][3]);
@@ -1685,20 +1685,30 @@ int main()
 	//	moch(0, 0), moch(1, 0), moch(2, 0), moch(3, 0), moch(0, 1), moch(1, 1), moch(2, 1), moch(3, 1), moch(0, 2), moch(1, 2), moch(2, 2), moch(3, 2), moch(0, 3), moch(1, 3), moch(2, 3), moch(3, 3));
 	//
 	//if (memcmp(&mglm, &moch, 64))
+	//{
 	//	och::print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!!!NOT EQUAL!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+	//	
+	//	const och::mat4* glm_rep = reinterpret_cast<och::mat4*>(&mglm);
+	//
+	//	och::mat4 diff = moch - *glm_rep;
+	//
+	//	och::print("diff:\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n\n",
+	//		diff(0, 0), diff(1, 0), diff(2, 0), diff(3, 0), diff(0, 1), diff(1, 1), diff(2, 1), diff(3, 1), diff(0, 2), diff(1, 2), diff(2, 2), diff(3, 2), diff(0, 3), diff(1, 3), diff(2, 3), diff(3, 3));
+	//}
 	//else
 	//	och::print("Equal\n\n");
+
 
 	hello_vulkan vk;
 	
 	err_info err = vk.run();
-
+	
 	if (err)
 	{
 		och::print("An Error occurred!\n");
-
+	
 		auto stack = och::get_stacktrace();
-
+	
 		for (auto e : stack)
 			och::print("Function {} on Line {}: \"{}\"\n\n", e->function, e->line_num, e->call);
 	}
