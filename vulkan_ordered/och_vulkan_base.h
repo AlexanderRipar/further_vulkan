@@ -703,33 +703,4 @@ namespace och
 
 		reinterpret_cast<vulkan_context*>(glfwGetWindowUserPointer(window))->flags.framebuffer_resized = true;
 	}
-
-	struct renderpass
-	{
-		VkRenderPass m_renderpass;
-
-		err_info create(vulkan_context& context)
-		{
-			// Create render pass
-			{
-				VkAttachmentDescription color_attachment{};
-				color_attachment.flags = 0;
-				color_attachment.format = context.m_swapchain_format;
-				color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-				color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-				color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-				color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-				color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-				color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			}
-
-			return {};
-		}
-
-		void destroy()
-		{
-
-		}
-	};
 }

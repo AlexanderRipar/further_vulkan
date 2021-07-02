@@ -13,6 +13,7 @@
 #include "och_bmp_header.h"
 #include "och_matmath.h"
 #include "och_vulkan_debug_callback.h"
+#include "och_timer.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -213,6 +214,10 @@ struct hello_vulkan
 
 	err_info init()
 	{
+		och::print("Starting initialization\n\n");
+
+		och::timer init_timer;
+
 		check(context.create("Hello Vulkan", window_width, window_height));
 
 		check(create_vk_render_pass());
@@ -250,6 +255,8 @@ struct hello_vulkan
 		check(create_vk_command_buffers());
 
 		check(create_vk_sync_objects());
+
+		och::print("Finished initialization. Time taken: {}\n\n", init_timer.read());
 
 		return {};
 	}
@@ -1650,12 +1657,6 @@ struct hello_vulkan
 
 		offset -= center;
 
-		och::print("min/max:\nx: {:8.4>_} / {:8.4>_}\ny: {:8.4>_} / {:8.4>_}\nz: {:8.4>_} / {:8.4>_}\nD: {:8.4>_} / {:8.4>_}\n\n", min_x, max_x, min_y, max_y, min_z, max_z, min, max);
-
-		och::print("inverse scale: {}\n\n", inv_scale);
-
-		och::print("offset: ({:8.4>_}, {:8.4>_}, {:8.4>_})\n\n", offset.x, offset.y, offset.z);
-
 		for (auto& v : verts)
 			v.pos = (v.pos * inv_scale) - (offset);
 	}
@@ -1663,42 +1664,6 @@ struct hello_vulkan
 
 int main()
 {
-	//glm::mat4 gm = glm::rotate(glm::mat4(1.0F), glm::radians(39.0F), glm::vec3(0.0F, 0.0F, 1.0F));
-	//och::mat4 om = och::mat4::rotate_z(glm::radians(39.0F));
-	//
-	//glm::mat4 gv = glm::lookAt(glm::vec3(2.0F, 2.0F, 2.0F), glm::vec3(0.0F, 0.0F, 0.0F), glm::vec3(0.0F, 0.0F, 1.0F));
-	//och::mat4 ov = och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F));
-	//
-	//uint32_t width = 1440;
-	//uint32_t height = 810;
-	//
-	//glm::mat4 gp = glm::perspective(glm::radians(45.0F), static_cast<float>(width) / height, 0.1F, 10.0F); gp[1][1] *= -1;
-	//och::mat4 op = och::perspective(0.785398F, static_cast<float>(width) / height, 0.1F, 10.0F);
-	//
-	//glm::mat4 mglm = gp * gv * gm;
-	//och::mat4 moch = op * ov * om;
-	//
-	//och::print("glm:\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n\n", 
-	//	mglm[0][0], mglm[1][0], mglm[2][0], mglm[3][0], mglm[0][1], mglm[1][1], mglm[2][1], mglm[3][1], mglm[0][2], mglm[1][2], mglm[2][2], mglm[3][2], mglm[0][3], mglm[1][3], mglm[2][3], mglm[3][3]);
-	//
-	//och::print("och:\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n\n", 
-	//	moch(0, 0), moch(1, 0), moch(2, 0), moch(3, 0), moch(0, 1), moch(1, 1), moch(2, 1), moch(3, 1), moch(0, 2), moch(1, 2), moch(2, 2), moch(3, 2), moch(0, 3), moch(1, 3), moch(2, 3), moch(3, 3));
-	//
-	//if (memcmp(&mglm, &moch, 64))
-	//{
-	//	och::print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!!!NOT EQUAL!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
-	//	
-	//	const och::mat4* glm_rep = reinterpret_cast<och::mat4*>(&mglm);
-	//
-	//	och::mat4 diff = moch - *glm_rep;
-	//
-	//	och::print("diff:\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n{:8.3>_} {:8.3>_} {:8.3>_} {:8.3>_}\n\n",
-	//		diff(0, 0), diff(1, 0), diff(2, 0), diff(3, 0), diff(0, 1), diff(1, 1), diff(2, 1), diff(3, 1), diff(0, 2), diff(1, 2), diff(2, 2), diff(3, 2), diff(0, 3), diff(1, 3), diff(2, 3), diff(3, 3));
-	//}
-	//else
-	//	och::print("Equal\n\n");
-
-
 	hello_vulkan vk;
 	
 	err_info err = vk.run();
