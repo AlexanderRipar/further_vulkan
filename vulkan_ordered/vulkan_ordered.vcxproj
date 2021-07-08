@@ -245,9 +245,11 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
     <ClInclude Include="och_heap_buffer.h" />
     <ClInclude Include="och_error_handling.h" />
     <ClInclude Include="och_helpers.h" />
+    <ClInclude Include="och_simple_compute.h" />
     <ClInclude Include="och_vulkan_debug_callback.h" />
     <ClInclude Include="och_vulkan_base.h" />
     <ClInclude Include="tiny_obj_loader.h" />
+    <ClInclude Include="voxel_renderer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\compile_shaders.bat" />

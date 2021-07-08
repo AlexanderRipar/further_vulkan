@@ -98,6 +98,12 @@
     <ClInclude Include="och_helpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="och_simple_compute.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="voxel_renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\vert.spv">

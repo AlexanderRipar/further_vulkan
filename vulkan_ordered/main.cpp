@@ -15,6 +15,8 @@
 #include "och_vulkan_debug_callback.h"
 #include "och_timer.h"
 
+#include "voxel_renderer.h"
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm.hpp>
@@ -34,8 +36,6 @@
 #define OCH_ASSET_SCALE 2.0F
 
 using err_info = och::err_info;
-
-void framebuffer_resize_callback_fn(GLFWwindow* window, int width, int height);
 
 VkDebugUtilsMessengerCreateInfoEXT populate_messenger_create_info() noexcept
 {
@@ -195,8 +195,6 @@ struct hello_vulkan
 
 	size_t curr_frame = 0;
 
-	bool framebuffer_resized = false;
-
 #ifdef OCH_VALIDATE
 	VkDebugUtilsMessengerEXT vk_debug_messenger = nullptr;
 #endif // OCH_VALIDATE
@@ -223,6 +221,8 @@ struct hello_vulkan
 		check(create_vk_render_pass());
 
 		check(create_vk_descriptor_set_layout());
+
+		check(create_vk_graphics_pipeline_layout());
 
 		check(create_vk_graphics_pipeline());
 
@@ -364,6 +364,20 @@ struct hello_vulkan
 		return {};
 	}
 
+	err_info create_vk_graphics_pipeline_layout()
+	{
+		VkPipelineLayoutCreateInfo layout_info{};
+		layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layout_info.setLayoutCount = 1;
+		layout_info.pSetLayouts = &vk_descriptor_set_layout;
+		layout_info.pushConstantRangeCount = 0;
+		layout_info.pPushConstantRanges = nullptr;
+
+		check(vkCreatePipelineLayout(context.m_device, &layout_info, nullptr, &vk_pipeline_layout));
+
+		return {};
+	}
+
 	err_info create_vk_graphics_pipeline()
 	{
 		VkShaderModule vert_shader_module;
@@ -477,15 +491,6 @@ struct hello_vulkan
 		depth_stencil_info.front = {};
 		depth_stencil_info.back = {};
 
-		VkPipelineLayoutCreateInfo layout_info{};
-		layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layout_info.setLayoutCount = 1;
-		layout_info.pSetLayouts = &vk_descriptor_set_layout;
-		layout_info.pushConstantRangeCount = 0;
-		layout_info.pPushConstantRanges = nullptr;
-
-		check(vkCreatePipelineLayout(context.m_device, &layout_info, nullptr, &vk_pipeline_layout));
-
 		VkGraphicsPipelineCreateInfo pipeline_info{};
 		pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 		pipeline_info.stageCount = 2;
@@ -516,13 +521,9 @@ struct hello_vulkan
 	
 	err_info create_vk_command_pool()
 	{
-		queue_family_indices family_indices;
-
-		check(query_queue_families(context.m_physical_device, context.m_surface, family_indices));
-
 		VkCommandPoolCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		create_info.queueFamilyIndex = family_indices.graphics_idx;
+		create_info.queueFamilyIndex = context.m_general_queues.index;
 		
 		check(vkCreateCommandPool(context.m_device, &create_info, nullptr, &vk_command_pool));
 
@@ -1007,7 +1008,7 @@ struct hello_vulkan
 
 		check(vkResetFences(context.m_device, 1, &vk_inflight_fences[curr_frame]));
 
-		check(vkQueueSubmit(context.m_render_queue, 1, &submit_info, vk_inflight_fences[curr_frame]));
+		check(vkQueueSubmit(context.m_general_queues[0], 1, &submit_info, vk_inflight_fences[curr_frame]));
 
 		VkPresentInfoKHR present_info{};
 		present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1018,9 +1019,9 @@ struct hello_vulkan
 		present_info.pImageIndices = &image_idx;
 		present_info.pResults = nullptr;
 
-		if (VkResult present_rst = vkQueuePresentKHR(context.m_render_queue, &present_info); present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || framebuffer_resized)
+		if (VkResult present_rst = vkQueuePresentKHR(context.m_general_queues[0], &present_info); present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.m_flags.framebuffer_resized)
 		{
-			framebuffer_resized = false;
+			context.m_flags.framebuffer_resized = false;
 			recreate_swapchain();
 		}
 		else
@@ -1041,17 +1042,9 @@ struct hello_vulkan
 
 		check(create_vk_colour_resources());
 
-		check(create_vk_render_pass());
-
 		check(create_vk_graphics_pipeline());
 
 		check(create_vk_swapchain_framebuffers());
-
-		check(create_vk_uniform_buffers());
-
-		check(create_vk_descriptor_pool());
-
-		check(create_vk_descriptor_sets());
 
 		check(create_vk_command_buffers());
 
@@ -1073,18 +1066,37 @@ struct hello_vulkan
 
 		vkDeviceWaitIdle(context.m_device);
 
+
+
+		vkFreeCommandBuffers(context.m_device, vk_command_pool, static_cast<uint32_t>(vk_command_buffers.size()), vk_command_buffers.data());
+
+		for (auto& framebuffer : vk_swapchain_framebuffers)
+			vkDestroyFramebuffer(context.m_device, framebuffer, nullptr);
+
+		vkDestroyPipeline(context.m_device, vk_graphics_pipeline, nullptr);
+
+
+
+		vkDestroyImageView(context.m_device, vk_depth_image_view, nullptr);
+
+		vkDestroyImage(context.m_device, vk_depth_image, nullptr);
+
+		vkFreeMemory(context.m_device, vk_depth_image_memory, nullptr);
+
+
+
 		vkDestroyImageView(context.m_device, vk_colour_image_view, nullptr);
 
 		vkDestroyImage(context.m_device, vk_colour_image, nullptr);
 
 		vkFreeMemory(context.m_device, vk_colour_image_memory, nullptr);
+	}
 
-		for (auto& framebuffer : vk_swapchain_framebuffers)
-			vkDestroyFramebuffer(context.m_device, framebuffer, nullptr);
+	void cleanup()
+	{
+		cleanup_swapchain();
 
-		vkFreeCommandBuffers(context.m_device, vk_command_pool, static_cast<uint32_t>(vk_command_buffers.size()), vk_command_buffers.data());
-
-		vkDestroyPipeline(context.m_device, vk_graphics_pipeline, nullptr);
+		vkDestroyDescriptorPool(context.m_device, vk_descriptor_pool, nullptr);
 
 		vkDestroyPipelineLayout(context.m_device, vk_pipeline_layout, nullptr);
 
@@ -1092,22 +1104,9 @@ struct hello_vulkan
 
 		for (auto& buffer : vk_uniform_buffers)
 			vkDestroyBuffer(context.m_device, buffer, nullptr);
-
+		
 		for (auto& memory : vk_uniform_buffers_memory)
 			vkFreeMemory(context.m_device, memory, nullptr);
-
-		vkDestroyDescriptorPool(context.m_device, vk_descriptor_pool, nullptr);
-
-		vkDestroyImageView(context.m_device, vk_depth_image_view, nullptr);
-
-		vkDestroyImage(context.m_device, vk_depth_image, nullptr);
-
-		vkFreeMemory(context.m_device, vk_depth_image_memory, nullptr);
-	}
-
-	void cleanup()
-	{
-		cleanup_swapchain();
 
 		vkDestroySampler(context.m_device, vk_texture_sampler, nullptr);
 
@@ -1141,30 +1140,6 @@ struct hello_vulkan
 		context.destroy();
 	}
 
-	err_info find_first_supported_format(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags required_features, VkFormat& out_format)
-	{
-		for (auto format : candidates)
-		{
-			VkFormatProperties props;
-			vkGetPhysicalDeviceFormatProperties(context.m_physical_device, format, &props);
-
-			if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & required_features) == required_features)
-			{
-				out_format = format;
-
-				return {};
-			}
-			else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & required_features) == required_features)
-			{
-				out_format = format;
-
-				return {};
-			}
-		}
-
-		return MAKE_ERROR(1);
-	}
-
 	err_info create_shader_module_from_file(const char* filename, VkShaderModule& out_shader_module)
 	{
 		och::mapped_file<uint8_t> shader_file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
@@ -1174,86 +1149,18 @@ struct hello_vulkan
 
 		VkShaderModuleCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		create_info.codeSize = shader_file.bytes;
-		create_info.pCode = reinterpret_cast<const uint32_t*>(shader_file.get_data().beg);
+		create_info.codeSize = shader_file.bytes();
+		create_info.pCode = reinterpret_cast<const uint32_t*>(shader_file.data());
 
 		check(vkCreateShaderModule(context.m_device, &create_info, nullptr, &out_shader_module));
 
 		return {};
 	}
 
-	err_info query_queue_families(VkPhysicalDevice physical_dev, VkSurfaceKHR surface, queue_family_indices& out_indices)
-	{
-		uint32_t queue_family_cnt;
-
-		vkGetPhysicalDeviceQueueFamilyProperties(physical_dev, &queue_family_cnt, nullptr);
-
-		std::vector<VkQueueFamilyProperties> available(queue_family_cnt);
-
-		vkGetPhysicalDeviceQueueFamilyProperties(physical_dev, &queue_family_cnt, available.data());
-
-		bool has_graphics_and_present_in_one = false;
-
-		for (uint32_t i = 0; i != queue_family_cnt; ++i)
-		{
-			VkQueueFamilyProperties& avl = available[i];
-
-			VkBool32 supports_present;
-
-			check(vkGetPhysicalDeviceSurfaceSupportKHR(physical_dev, i, surface, &supports_present));
-
-			if (avl.queueFlags & VK_QUEUE_GRAPHICS_BIT && !has_graphics_and_present_in_one)
-			{
-				out_indices.graphics_idx = i;
-
-				if (supports_present)
-				{
-					out_indices.present_idx = i;
-
-					has_graphics_and_present_in_one = true;
-				}
-			}
-
-			if (avl.queueFlags & VK_QUEUE_COMPUTE_BIT)
-				out_indices.compute_idx = i;
-
-			if (avl.queueFlags & VK_QUEUE_TRANSFER_BIT)
-				out_indices.transfer_idx = i;
-
-			if (supports_present && !has_graphics_and_present_in_one)
-				out_indices.present_idx = i;
-		}
-
-		return {};
-	}
-
-	err_info query_swapchain_support(VkPhysicalDevice physical_dev, VkSurfaceKHR surface, swapchain_support_details& out_support_details)
-	 {
-		 check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_dev, surface, &out_support_details.capabilites));
-
-		 uint32_t format_cnt;
-
-		 check(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_dev, surface, &format_cnt, nullptr));
-
-		 out_support_details.formats.resize(format_cnt);
-
-		 check(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_dev, surface, &format_cnt, out_support_details.formats.data()));
-
-		 uint32_t present_mode_cnt;
-
-		 check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_dev, surface, &present_mode_cnt, nullptr));
-
-		 out_support_details.present_modes.resize(present_mode_cnt);
-
-		 check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_dev, surface, &present_mode_cnt, out_support_details.present_modes.data()));
-
-		 return {};
-	 }
-
 	err_info query_memory_type_index(uint32_t type_filter, VkMemoryPropertyFlags properties, uint32_t& out_type_index)
 	{
 		VkPhysicalDeviceMemoryProperties mem_props{};
-
+		
 		vkGetPhysicalDeviceMemoryProperties(context.m_physical_device, &mem_props);
 
 		for (uint32_t i = 0; i != mem_props.memoryTypeCount; ++i)
@@ -1265,30 +1172,6 @@ struct hello_vulkan
 			}
 
 		return MAKE_ERROR(1);
-	}
-
-	VkSampleCountFlagBits query_max_msaa_samples()
-	{
-		VkPhysicalDeviceProperties props;
-
-		vkGetPhysicalDeviceProperties(context.m_physical_device, &props);
-
-		VkSampleCountFlags compat = props.limits.framebufferDepthSampleCounts & props.limits.framebufferColorSampleCounts;
-
-		if (compat & VK_SAMPLE_COUNT_64_BIT)
-			return VK_SAMPLE_COUNT_64_BIT;
-		if (compat & VK_SAMPLE_COUNT_32_BIT)
-			return VK_SAMPLE_COUNT_32_BIT;
-		if (compat & VK_SAMPLE_COUNT_16_BIT)
-			return VK_SAMPLE_COUNT_16_BIT;
-		if (compat & VK_SAMPLE_COUNT_8_BIT)
-			return VK_SAMPLE_COUNT_8_BIT;
-		if (compat & VK_SAMPLE_COUNT_4_BIT)
-			return VK_SAMPLE_COUNT_4_BIT;
-		if (compat & VK_SAMPLE_COUNT_2_BIT)
-			return VK_SAMPLE_COUNT_2_BIT;
-
-		return VK_SAMPLE_COUNT_1_BIT;
 	}
 
 	err_info allocate_buffer(VkDeviceSize bytes, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory, VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_cnt = 0, const uint32_t* queue_family_ptr = nullptr)
@@ -1594,7 +1477,7 @@ struct hello_vulkan
 		submit_info.commandBufferCount = 1;
 		submit_info.pCommandBuffers = &command_buffer;
 		
-		check(vkQueueSubmit(context.m_render_queue, 1, &submit_info, nullptr));
+		check(vkQueueSubmit(context.m_general_queues[0], 1, &submit_info, nullptr));
 
 		check(vkDeviceWaitIdle(context.m_device));
 
@@ -1670,6 +1553,8 @@ int main()
 	
 	if (err)
 	{
+		vk.cleanup();
+
 		och::print("An Error occurred!\n");
 	
 		auto stack = och::get_stacktrace();
@@ -1679,11 +1564,4 @@ int main()
 	}
 	else
 		och::print("\nProcess terminated successfully\n");
-}
-
-void framebuffer_resize_callback_fn(GLFWwindow* window, int width, int height)
-{
-	width, height;
-
-	reinterpret_cast<hello_vulkan*>(glfwGetWindowUserPointer(window))->framebuffer_resized = true;
 }
