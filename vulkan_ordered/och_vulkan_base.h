@@ -544,12 +544,6 @@ namespace och
 
 				check(vkCreateDevice(m_physical_device, &device_ci, nullptr, &m_device));
 
-				m_general_queues.cnt = requested_general_queues;
-				
-				m_compute_queues.cnt = requested_compute_queues;
-
-				m_transfer_queues.cnt = requested_transfer_queues;
-
 				for(uint32_t i = 0; i != requested_general_queues; ++i)
 					vkGetDeviceQueue(m_device, m_general_queues.index, i, m_general_queues.queues + i);
 
