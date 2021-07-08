@@ -209,37 +209,58 @@ namespace och
 		}
 	};
 
-	struct queue_info
+	struct queue_family_info
 	{
+		static constexpr uint32_t MAX_QUEUE_CNT = 4;
+
 		uint32_t index;
 
-		VkQueueFamilyProperties properties;
+		uint32_t cnt;
+
+		VkQueue queues[MAX_QUEUE_CNT];
+
+		VkQueue& operator[](size_t n) noexcept { return queues[n]; }
+
+		const VkQueue& operator[](size_t n) const noexcept { return queues[n]; }
+	};
+
+	struct memory_info
+	{
+		uint32_t heap_index;
+		uint32_t type_index;
 	};
 
 	struct vulkan_context
 	{
 		static inline required_feature_list s_feats;
 
-		static constexpr uint32_t max_swapchain_images = 8;
+		static constexpr uint32_t MAX_SWAPCHAIN_IMAGE_CNT = 4;
 
 
 
 		struct
 		{
 			bool framebuffer_resized : 1;
-		} flags{};
+			bool fully_initialized : 1;
+		} m_flags{};
 
-		queue_info m_render_queue_info;
+		queue_family_info m_general_queues{};
 
-		queue_info m_transfer_queue_info;
+		queue_family_info m_compute_queues{};
+
+		queue_family_info m_transfer_queues{};
+
+		VkExtent3D m_min_image_transfer_granularity{};
+
+
+
+		memory_info m_device_memory{};
+
+		memory_info m_staging_memory{};
 
 
 
 		GLFWwindow* m_window{};
-
-		VkQueue m_render_queue;
-
-		VkQueue m_transfer_queue;
 
 		VkInstance m_instance{};
 
@@ -249,30 +270,33 @@ namespace och
 
 		VkSurfaceKHR m_surface{};
 
-		VkDebugUtilsMessengerEXT m_debug_messenger;
+		VkDebugUtilsMessengerEXT m_debug_messenger{};
 
 
 
-		VkSwapchainKHR m_swapchain;
+		VkSwapchainKHR m_swapchain{};
 
-		VkFormat m_swapchain_format;
+		VkFormat m_swapchain_format{};
 
-		VkColorSpaceKHR m_swapchain_colorspace;
+		VkColorSpaceKHR m_swapchain_colorspace{};
 
-		VkPresentModeKHR m_swapchain_present_mode;
+		VkPresentModeKHR m_swapchain_present_mode{};
 
-		VkExtent2D m_swapchain_extent;
+		VkExtent2D m_swapchain_extent{};
 
-		uint32_t m_swapchain_image_cnt;
+		uint32_t m_swapchain_image_cnt{};
 
-		VkImage m_swapchain_images[max_swapchain_images]{};
+		VkImage m_swapchain_images[MAX_SWAPCHAIN_IMAGE_CNT]{};
 
-		VkImageView m_swapchain_image_views[max_swapchain_images]{};
+		VkImageView m_swapchain_image_views[MAX_SWAPCHAIN_IMAGE_CNT]{};
 
 
 
-		err_info create(const char* app_name, uint32_t window_width, uint32_t window_height)
+		err_info create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr)
 		{
+			if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
+				return MSG_ERROR("Too many queues requested");
+
 			// Create window
 			{
 				glfwInit();
@@ -350,6 +374,9 @@ namespace och
 				check(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface));
 			}
 
+			// Surface Capabilites for use throughout the create() Function
+			VkSurfaceCapabilitiesKHR surface_capabilites;
+
 			// Select physical device and save queue family info
 			{
 				uint32_t avl_dev_cnt;
@@ -393,28 +420,55 @@ namespace och
 
 					uint32_t queue_family_cnt;
 					vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_family_cnt, nullptr);
-					och::heap_buffer<VkQueueFamilyProperties> families(queue_family_cnt);
-					vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_family_cnt, families.data());
+					och::heap_buffer<VkQueueFamilyProperties> family_properties(queue_family_cnt);
+					vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_family_cnt, family_properties.data());
 
+					uint32_t general_queue_index = VK_QUEUE_FAMILY_IGNORED;
+					uint32_t compute_queue_index = VK_QUEUE_FAMILY_IGNORED;
 					uint32_t transfer_queue_index = VK_QUEUE_FAMILY_IGNORED;
-					uint32_t render_queue_index = VK_QUEUE_FAMILY_IGNORED;
 
 					for (uint32_t f = 0; f != queue_family_cnt; ++f)
 					{
 						VkBool32 supports_present;
 						check(vkGetPhysicalDeviceSurfaceSupportKHR(dev, f, m_surface, &supports_present));
 
-						if ((families[f].queueFlags & (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT)) == (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT) && supports_present)
-							render_queue_index = f;
-						else if (families[f].queueFlags == VK_QUEUE_TRANSFER_BIT || ((families[f].queueFlags & VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_TRANSFER_BIT && transfer_queue_index == VK_QUEUE_FAMILY_IGNORED))
+						if ((family_properties[f].queueFlags & (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT)) == (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT) && supports_present)
+							general_queue_index = f;
+						else if (family_properties[f].queueFlags == VK_QUEUE_TRANSFER_BIT || ((family_properties[f].queueFlags & VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_TRANSFER_BIT && transfer_queue_index == VK_QUEUE_FAMILY_IGNORED))
 							transfer_queue_index = f;
 					}
 
-					if (transfer_queue_index == VK_QUEUE_FAMILY_IGNORED || render_queue_index == VK_QUEUE_FAMILY_IGNORED)
+					if ((( general_queue_index == VK_QUEUE_FAMILY_IGNORED &&  requested_general_queues) || ( requested_general_queues && family_properties[ general_queue_index].queueCount <  requested_general_queues)) ||
+						(( compute_queue_index == VK_QUEUE_FAMILY_IGNORED &&  requested_compute_queues) || ( requested_compute_queues && family_properties[ compute_queue_index].queueCount <  requested_compute_queues)) ||
+						((transfer_queue_index == VK_QUEUE_FAMILY_IGNORED && requested_transfer_queues) || (requested_transfer_queues && family_properties[transfer_queue_index].queueCount < requested_transfer_queues)))
 						continue;
 
-					m_transfer_queue_info = { transfer_queue_index, families[transfer_queue_index] };
-					m_render_queue_info = { render_queue_index, families[render_queue_index] };
+					// Check if requested Image Usage is available for the Swapchain
+
+					check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_surface, &surface_capabilites));
+
+					if ((surface_capabilites.supportedUsageFlags & swapchain_image_usage) != swapchain_image_usage)
+						continue;
+
+					if (requested_general_queues)
+					{
+						m_general_queues.index = general_queue_index;
+						m_general_queues.cnt = requested_general_queues;
+					}
+
+					if (requested_compute_queues)
+					{
+						m_compute_queues.index = compute_queue_index;
+						m_compute_queues.cnt = requested_compute_queues;
+					}
+
+					if (requested_transfer_queues)
+					{
+						m_transfer_queues.index = transfer_queue_index;
+						m_transfer_queues.cnt = requested_transfer_queues;
+
+						m_min_image_transfer_granularity = family_properties[transfer_queue_index].minImageTransferGranularity;
+					}
 
 					m_physical_device = dev;
 
@@ -428,37 +482,82 @@ namespace och
 
 			// Create logical device
 			{
-				float render_queue_priority = 1.0F, transfer_queue_priority = 0.75F;
+				float general_queue_priorities[queue_family_info::MAX_QUEUE_CNT];
+				for (uint32_t i = 0; i != queue_family_info::MAX_QUEUE_CNT; ++i)
+					general_queue_priorities[i] = 1.0F;
 
-				VkDeviceQueueCreateInfo queue_cis[2]{};
+				float compute_queue_priorities[queue_family_info::MAX_QUEUE_CNT];
 
-				queue_cis[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_cis[0].queueFamilyIndex = m_render_queue_info.index;
-				queue_cis[0].queueCount = 1;
-				queue_cis[0].pQueuePriorities = &render_queue_priority;
+				for (uint32_t i = 0; i != queue_family_info::MAX_QUEUE_CNT; ++i)
+					compute_queue_priorities[i] = 1.0F;
 
-				queue_cis[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_cis[1].queueFamilyIndex = m_transfer_queue_info.index;
-				queue_cis[1].queueCount = 1;
-				queue_cis[1].pQueuePriorities = &transfer_queue_priority;
+				float transfer_queue_priorities[queue_family_info::MAX_QUEUE_CNT];
 
-				VkPhysicalDeviceFeatures enabled_features{};
+				for (uint32_t i = 0; i != queue_family_info::MAX_QUEUE_CNT; ++i)
+					transfer_queue_priorities[i] = 1.0F;
+
+				VkDeviceQueueCreateInfo queue_cis[3]{};
+
+				uint32_t ci_idx = 0;
+
+				if (requested_general_queues)
+				{
+					queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+					queue_cis[ci_idx].queueFamilyIndex = m_general_queues.index;
+					queue_cis[ci_idx].queueCount = requested_general_queues;
+					queue_cis[ci_idx].pQueuePriorities = general_queue_priorities;
+
+					++ci_idx;
+				}
+
+				if (requested_compute_queues)
+				{
+					queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+					queue_cis[ci_idx].queueFamilyIndex = m_compute_queues.index;
+					queue_cis[ci_idx].queueCount = requested_compute_queues;
+					queue_cis[ci_idx].pQueuePriorities = compute_queue_priorities;
+
+					++ci_idx;
+				}
+
+				if (requested_transfer_queues)
+				{
+					queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+					queue_cis[ci_idx].queueFamilyIndex = m_transfer_queues.index;
+					queue_cis[ci_idx].queueCount = requested_transfer_queues;
+					queue_cis[ci_idx].pQueuePriorities = transfer_queue_priorities;
+
+					++ci_idx;
+				}
+
+				VkPhysicalDeviceFeatures default_enabled_device_features{};
 
 				VkDeviceCreateInfo device_ci{};
 				device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-				device_ci.queueCreateInfoCount = 2;
+				device_ci.queueCreateInfoCount = ci_idx;
 				device_ci.pQueueCreateInfos = queue_cis;
 				device_ci.enabledLayerCount = s_feats.dev_layer_cnt();
 				device_ci.ppEnabledLayerNames = s_feats.dev_layers();
 				device_ci.enabledExtensionCount = s_feats.dev_extension_cnt();
 				device_ci.ppEnabledExtensionNames = s_feats.dev_extensions();
-				device_ci.pEnabledFeatures = &enabled_features;
+				device_ci.pEnabledFeatures = enabled_device_features ? enabled_device_features : &default_enabled_device_features;
 
 				check(vkCreateDevice(m_physical_device, &device_ci, nullptr, &m_device));
 
-				vkGetDeviceQueue(m_device, m_render_queue_info.index, 0, &m_render_queue);
+				m_general_queues.cnt = requested_general_queues;
+				
+				m_compute_queues.cnt = requested_compute_queues;
 
-				vkGetDeviceQueue(m_device, m_render_queue_info.index, 0, &m_transfer_queue);
+				m_transfer_queues.cnt = requested_transfer_queues;
+
+				for(uint32_t i = 0; i != requested_general_queues; ++i)
+					vkGetDeviceQueue(m_device, m_general_queues.index, i, m_general_queues.queues + i);
+
+				for (uint32_t i = 0; i != requested_compute_queues; ++i)
+					vkGetDeviceQueue(m_device, m_compute_queues.index, i, m_compute_queues.queues + i);
+
+				for (uint32_t i = 0; i != requested_transfer_queues; ++i)
+					vkGetDeviceQueue(m_device, m_transfer_queues.index, i, m_transfer_queues.queues + i);
 			}
 
 			// Get supported swapchain settings
@@ -478,7 +577,7 @@ namespace och
 
 						break;
 					}
-
+				
 				uint32_t present_mode_cnt;
 				check(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &present_mode_cnt, nullptr));
 				och::heap_buffer<VkPresentModeKHR> present_modes(present_mode_cnt);
@@ -493,11 +592,6 @@ namespace och
 						break;
 					}
 			}
-
-			// Get surface's capabilites
-
-			VkSurfaceCapabilitiesKHR surface_capabilites;
-			check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilites));
 
 			// Choose initial swapchain extent
 			{
@@ -518,9 +612,9 @@ namespace och
 				// Choose image count
 				uint32_t requested_img_cnt = surface_capabilites.minImageCount + 1;
 
-				if (surface_capabilites.minImageCount == max_swapchain_images || surface_capabilites.maxImageCount == surface_capabilites.minImageCount)
+				if (surface_capabilites.minImageCount == MAX_SWAPCHAIN_IMAGE_CNT || surface_capabilites.maxImageCount == surface_capabilites.minImageCount)
 					--requested_img_cnt;
-				else if (surface_capabilites.minImageCount > max_swapchain_images)
+				else if (surface_capabilites.minImageCount > MAX_SWAPCHAIN_IMAGE_CNT)
 					return MSG_ERROR("Minimum number of images supported by swapchain exceeds engine's maximum");
 
 				VkSwapchainCreateInfoKHR swapchain_ci{};
@@ -533,7 +627,7 @@ namespace och
 				swapchain_ci.imageColorSpace = m_swapchain_colorspace;
 				swapchain_ci.imageExtent = m_swapchain_extent;
 				swapchain_ci.imageArrayLayers = 1;
-				swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+				swapchain_ci.imageUsage = swapchain_image_usage;
 				swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 				swapchain_ci.queueFamilyIndexCount = 0;
 				swapchain_ci.pQueueFamilyIndices = nullptr;
@@ -552,7 +646,7 @@ namespace och
 			{
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
-				if (m_swapchain_image_cnt > max_swapchain_images)
+				if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
 					return MSG_ERROR("Created swapchain contains too many images");
 
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
@@ -580,6 +674,38 @@ namespace och
 				}
 			}
 
+			// Get memory heap- and type-indices for device- and staging-memory
+			{
+				VkPhysicalDeviceMemoryProperties mem_props;
+				vkGetPhysicalDeviceMemoryProperties(m_physical_device, &mem_props);
+
+				for (uint32_t i = 0; i != mem_props.memoryTypeCount; ++i)
+					if ((mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+					{
+						m_device_memory.type_index = i;
+						m_device_memory.heap_index = mem_props.memoryTypes[i].heapIndex;
+
+						goto DEVICE_MEM_FOUND;
+					}
+
+				return MSG_ERROR("Could not find a memory type suitable as device memory");
+
+			DEVICE_MEM_FOUND:
+
+				for (uint32_t i = 0; i != mem_props.memoryTypeCount; ++i)
+					if ((mem_props.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+					{
+						m_staging_memory.type_index = i;
+						m_staging_memory.heap_index = mem_props.memoryTypes[i].heapIndex;
+						
+						goto STAGING_MEM_FOUND;
+					}
+
+				return MSG_ERROR("Could not find a memory type suitable as staging memory");
+
+			STAGING_MEM_FOUND:;
+			}
+
 			return {};
 		}
 
@@ -596,12 +722,17 @@ namespace och
 
 #ifdef OCH_VALIDATE
 
-			auto destroy_fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT"));
+			// If m_instance is null at this point, this cleanup must be the result of a failed initialization, 
+			// and m_debug_messenger cannot have been created yet either. Hence, we skip this to avoid loader issues.
+			if (m_instance)
+			{
+				auto destroy_fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT"));
 
-			if (destroy_fn)
-				destroy_fn(m_instance, m_debug_messenger, nullptr);
-			else
-				och::print("\nERROR DURING CLEANUP: Could not load vkDestroyDebugUtilsMessengerEXT\n");
+				if (destroy_fn)
+					destroy_fn(m_instance, m_debug_messenger, nullptr);
+				else if (m_instance)
+					och::print("\nERROR DURING CLEANUP: Could not load vkDestroyDebugUtilsMessengerEXT\n");
+			}
 
 #endif // OCH_VALIDATE
 
@@ -665,7 +796,7 @@ namespace och
 			{
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
-				if (m_swapchain_image_cnt > max_swapchain_images)
+				if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
 					return MSG_ERROR("Recreated swapchain contains too many images");
 
 				check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
@@ -695,12 +826,58 @@ namespace och
 
 			return {};
 		}
+
+		/*
+		err_info allocate(	VkImage& out_image, 
+							VkImageType type, 
+							VkFormat format, 
+							VkExtent3D extent, 
+							VkImageUsageFlags usage, 
+							VkImageLayout initial_layout,
+							memory_info memory,
+							uint32_t mip_levels = 1,
+							VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL, 
+							VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, 
+							uint32_t queue_family_cnt = 0, 
+							const uint32_t* queue_families_ptr = nullptr)
+	{
+			VkImageCreateInfo image_ci{};
+			image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			image_ci.pNext = nullptr;
+			image_ci.flags = 0;
+			image_ci.imageType = type;
+			image_ci.format = format;
+			image_ci.extent = extent;
+			image_ci.mipLevels = mip_levels;
+			image_ci.arrayLayers = 1;
+			image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+			image_ci.tiling = tiling;
+			image_ci.usage = usage;
+			image_ci.sharingMode = share_mode;
+			image_ci.queueFamilyIndexCount = queue_family_cnt;
+			image_ci.pQueueFamilyIndices = queue_families_ptr;
+			image_ci.initialLayout = initial_layout;
+
+			check(vkCreateImage(m_device, &image_ci, nullptr, &out_image));
+
+			VkMemoryRequirements mem_reqs;
+			vkGetImageMemoryRequirements(m_device, out_image, &mem_reqs);
+
+			if (!(mem_reqs.memoryTypeBits & (1 << memory.type_index)))
+				return MSG_ERROR("Image not compatible with requested memory type");
+
+
+
+
+			return {};
+		}
+		*/
 	};
 
 	void vulkan_context_resize_callback(GLFWwindow* window, int width, int height)
 	{
 		width, height;
 
-		reinterpret_cast<vulkan_context*>(glfwGetWindowUserPointer(window))->flags.framebuffer_resized = true;
+		reinterpret_cast<vulkan_context*>(glfwGetWindowUserPointer(window))->m_flags.framebuffer_resized = true;
 	}
 }
