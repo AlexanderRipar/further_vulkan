@@ -46,7 +46,7 @@ namespace och
 
 	error_type get_errtype() noexcept;
 
-#define check(macro_error_cause) {static constexpr och::error_context ctx{__FILE__, __FUNCTION__, #macro_error_cause, __LINE__}; if(och::err_info macro_result = och::err_info(macro_error_cause, ctx)) return macro_result; }
+#define check(macro_error_cause) {static constexpr och::error_context macro_defined_ctx{__FILE__, __FUNCTION__, #macro_error_cause, __LINE__}; if(och::err_info macro_result = och::err_info(macro_error_cause, macro_defined_ctx)) return macro_result; }
 
 #define MAKE_ERROR(macro_num) och::err_info(static_cast<uint64_t>(macro_num), och::error_context{__FILE__, __FUNCTION__, #macro_num, __LINE__})
 
