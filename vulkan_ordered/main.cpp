@@ -185,14 +185,6 @@ struct hello_vulkan
 
 	VkImageView vk_depth_image_view = nullptr;
 
-	VkSampleCountFlagBits vk_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkImage vk_colour_image = nullptr;
-
-	VkDeviceMemory vk_colour_image_memory = nullptr;
-
-	VkImageView vk_colour_image_view = nullptr;
-
 	size_t curr_frame = 0;
 
 #ifdef OCH_VALIDATE
@@ -227,8 +219,6 @@ struct hello_vulkan
 		check(create_vk_graphics_pipeline());
 
 		check(create_vk_command_pool());
-
-		check(create_vk_colour_resources());
 
 		check(create_vk_depth_resources());
 
@@ -265,33 +255,23 @@ struct hello_vulkan
 	{
 		VkAttachmentDescription color_attachment{};
 		color_attachment.format = context.m_swapchain_format;
-		color_attachment.samples = vk_msaa_samples;
+		color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 		color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 		VkAttachmentDescription depth_attachment{};
 		depth_attachment.format = VK_FORMAT_D32_SFLOAT;
-		depth_attachment.samples = vk_msaa_samples;
+		depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 		depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentDescription color_attachment_resolve{};
-		color_attachment_resolve.format = context.m_swapchain_format;
-		color_attachment_resolve.samples = VK_SAMPLE_COUNT_1_BIT;
-		color_attachment_resolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		color_attachment_resolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		color_attachment_resolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		color_attachment_resolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		color_attachment_resolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 		VkAttachmentReference color_ref{};
 		color_ref.attachment = 0;
@@ -301,16 +281,11 @@ struct hello_vulkan
 		depth_ref.attachment = 1;
 		depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-		VkAttachmentReference color_resolve_ref{};
-		color_resolve_ref.attachment = 2;
-		color_resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
 		VkSubpassDescription subpass{};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 		subpass.colorAttachmentCount = 1;
 		subpass.pColorAttachments = &color_ref;
 		subpass.pDepthStencilAttachment = &depth_ref;
-		subpass.pResolveAttachments = &color_resolve_ref;
 
 		VkSubpassDependency dependency{};
 		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -320,7 +295,7 @@ struct hello_vulkan
 		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-		VkAttachmentDescription attachment_descs[]{ color_attachment, depth_attachment, color_attachment_resolve };
+		VkAttachmentDescription attachment_descs[]{ color_attachment, depth_attachment };
 
 		VkRenderPassCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -446,7 +421,7 @@ struct hello_vulkan
 		VkPipelineMultisampleStateCreateInfo multisample_info{};
 		multisample_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisample_info.sampleShadingEnable = VK_FALSE;
-		multisample_info.rasterizationSamples = vk_msaa_samples;
+		multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisample_info.minSampleShading = 1.0F;
 		multisample_info.pSampleMask = nullptr;
 		multisample_info.alphaToCoverageEnable = VK_FALSE;
@@ -530,20 +505,9 @@ struct hello_vulkan
 		return {};
 	}
 
-	err_info create_vk_colour_resources()
-	{
-		VkFormat colour_format = context.m_swapchain_format;
-
-		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, colour_format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_colour_image, vk_colour_image_memory, vk_msaa_samples));
-
-		check(allocate_image_view(vk_colour_image, colour_format, VK_IMAGE_ASPECT_COLOR_BIT, vk_colour_image_view));
-
-		return {};
-	}
-
 	err_info create_vk_depth_resources()
 	{
-		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, vk_msaa_samples));
+		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
 
 		check(allocate_image_view(vk_depth_image, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, vk_depth_image_view));
 
@@ -558,7 +522,7 @@ struct hello_vulkan
 
 		for (size_t i = 0; i != context.m_swapchain_image_cnt; ++i)
 		{
-			VkImageView attachments[]{ vk_colour_image_view, vk_depth_image_view, context.m_swapchain_image_views[i] };
+			VkImageView attachments[]{ context.m_swapchain_image_views[i], vk_depth_image_view };
 
 			VkFramebufferCreateInfo create_info{};
 			create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1040,8 +1004,6 @@ struct hello_vulkan
 
 		check(create_vk_depth_resources());
 
-		check(create_vk_colour_resources());
-
 		check(create_vk_graphics_pipeline());
 
 		check(create_vk_swapchain_framebuffers());
@@ -1082,14 +1044,6 @@ struct hello_vulkan
 		vkDestroyImage(context.m_device, vk_depth_image, nullptr);
 
 		vkFreeMemory(context.m_device, vk_depth_image_memory, nullptr);
-
-
-
-		vkDestroyImageView(context.m_device, vk_colour_image_view, nullptr);
-
-		vkDestroyImage(context.m_device, vk_colour_image, nullptr);
-
-		vkFreeMemory(context.m_device, vk_colour_image_memory, nullptr);
 	}
 
 	void cleanup()
