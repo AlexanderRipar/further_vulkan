@@ -1,0 +1,4 @@
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=vert C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\vertex.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\vert.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=frag C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\fragment.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\frag.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_copy.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_copy.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_swapchain.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_swapchain.spv
