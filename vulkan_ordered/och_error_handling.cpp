@@ -6,7 +6,7 @@ namespace och
 	{
 		static constexpr uint32_t max_call_stack_depth = 16;
 
-		const error_context* call_stack[max_call_stack_depth];
+		error_context call_stack[max_call_stack_depth];
 
 		uint64_t errcode;
 
@@ -16,7 +16,7 @@ namespace och
 
 		__declspec(noinline) void start(VkResult rst, const error_context& ctx) noexcept
 		{
-			call_stack[0] = &ctx;
+			call_stack[0] = ctx;
 
 			call_stack_depth = 1;
 
@@ -27,7 +27,7 @@ namespace och
 
 		__declspec(noinline) void start(uint64_t rst, const error_context& ctx) noexcept
 		{
-			call_stack[0] = &ctx;
+			call_stack[0] = ctx;
 
 			call_stack_depth = 1;
 
@@ -45,7 +45,7 @@ namespace och
 				return;
 			}
 
-			call_stack[call_stack_depth++] = &ctx;
+			call_stack[call_stack_depth++] = ctx;
 		}
 
 		bool has_overflown() const noexcept
@@ -58,7 +58,7 @@ namespace och
 
 
 
-	och::range<const error_context*> get_stacktrace() noexcept
+	och::range<const error_context> get_stacktrace() noexcept
 	{
 		return { error_data.call_stack, error_data.call_stack_depth };
 	}

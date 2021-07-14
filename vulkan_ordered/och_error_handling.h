@@ -40,7 +40,7 @@ namespace och
 		operator bool() const noexcept;
 	};
 
-	och::range<const error_context*> get_stacktrace() noexcept;
+	och::range<const error_context> get_stacktrace() noexcept;
 
 	uint64_t get_errcode() noexcept;
 
