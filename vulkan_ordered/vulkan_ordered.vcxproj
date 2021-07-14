@@ -109,8 +109,7 @@
       </Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.vert -o shaders\vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
+      <Command>shaders/msvc_compile_shaders.bat
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -145,8 +144,7 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
       </Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.vert -o shaders\vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
+      <Command>shaders/msvc_compile_shaders.bat
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -176,8 +174,7 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
       </Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.vert -o shaders\vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
+      <Command>shaders/msvc_compile_shaders.bat
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -212,8 +209,7 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
       </Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.vert -o shaders\vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
+      <Command>shaders/msvc_compile_shaders.bat
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -227,8 +223,12 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
     <ClCompile Include="..\..\och_lib\och_lib\och_utf8.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="och_bmp_header.h" />
+    <ClCompile Include="compute_to_swapchain.cpp" />
     <ClCompile Include="och_error_handling.cpp" />
+    <ClCompile Include="compute_buffer_copy.cpp" />
+    <ClCompile Include="och_vulkan_base.cpp" />
     <ClCompile Include="och_vulkan_debug_callback.cpp" />
+    <ClCompile Include="vulkan_tutorial.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\och_lib\och_lib\och_constexpr_util.h" />
@@ -245,17 +245,23 @@ C:\VulkanSDK\1.2.176.1\Bin\glslc.exe shaders\shader.frag -o shaders\frag.spv
     <ClInclude Include="och_heap_buffer.h" />
     <ClInclude Include="och_error_handling.h" />
     <ClInclude Include="och_helpers.h" />
-    <ClInclude Include="och_simple_compute.h" />
+    <ClInclude Include="compute_buffer_copy.h" />
+    <ClInclude Include="compute_to_swapchain.h" />
     <ClInclude Include="och_vulkan_debug_callback.h" />
     <ClInclude Include="och_vulkan_base.h" />
+    <ClInclude Include="vulkan_tutorial.h" />
     <ClInclude Include="tiny_obj_loader.h" />
-    <ClInclude Include="voxel_renderer.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\compile_shaders.bat" />
+    <None Include="shaders\compute_copy.glsl" />
+    <None Include="shaders\compute_copy.spv" />
+    <None Include="shaders\compute_simplex.glsl" />
+    <None Include="shaders\compute_swapchain.glsl" />
+    <None Include="shaders\compute_swapchain.spv" />
     <None Include="shaders\frag.spv" />
-    <None Include="shaders\shader.frag" />
-    <None Include="shaders\shader.vert" />
+    <None Include="shaders\fragment.glsl" />
+    <None Include="shaders\msvc_compile_shaders.bat" />
+    <None Include="shaders\vertex.glsl" />
     <None Include="shaders\vert.spv" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
