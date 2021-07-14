@@ -16,14 +16,20 @@
     <Filter Include="och_lib">
       <UniqueIdentifier>{58ec9fa0-8a61-47f9-9024-380f87933e1d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="shaders">
-      <UniqueIdentifier>{e83856c9-126e-40fe-8173-d6aea3c00c0b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="sample_h">
       <UniqueIdentifier>{07d88a54-8bbb-45c7-97e3-e9c6a889f4fc}</UniqueIdentifier>
     </Filter>
     <Filter Include="sample_cpp">
       <UniqueIdentifier>{abc6907f-9a28-4cdb-a28c-e760500af7d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{538dcb7c-5f08-4dfe-98a1-168a01375f3a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders\shaders_spv">
+      <UniqueIdentifier>{5642e9a0-26b7-47d8-b4a9-5466fbe28313}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders\shaders_glsl">
+      <UniqueIdentifier>{e83856c9-126e-40fe-8173-d6aea3c00c0b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -127,34 +133,34 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\vert.spv">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\frag.spv">
-      <Filter>shaders</Filter>
-    </None>
     <None Include="shaders\fragment.glsl">
-      <Filter>shaders</Filter>
+      <Filter>shaders\shaders_glsl</Filter>
     </None>
     <None Include="shaders\vertex.glsl">
-      <Filter>shaders</Filter>
+      <Filter>shaders\shaders_glsl</Filter>
     </None>
     <None Include="shaders\compute_copy.glsl">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\msvc_compile_shaders.bat">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\compute_copy.spv">
-      <Filter>shaders</Filter>
+      <Filter>shaders\shaders_glsl</Filter>
     </None>
     <None Include="shaders\compute_swapchain.glsl">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\compute_swapchain.spv">
-      <Filter>shaders</Filter>
+      <Filter>shaders\shaders_glsl</Filter>
     </None>
     <None Include="shaders\compute_simplex.glsl">
+      <Filter>shaders\shaders_glsl</Filter>
+    </None>
+    <None Include="shaders\compute_copy.spv">
+      <Filter>shaders\shaders_spv</Filter>
+    </None>
+    <None Include="shaders\compute_swapchain.spv">
+      <Filter>shaders\shaders_spv</Filter>
+    </None>
+    <None Include="shaders\frag.spv">
+      <Filter>shaders\shaders_spv</Filter>
+    </None>
+    <None Include="shaders\vert.spv">
+      <Filter>shaders\shaders_spv</Filter>
+    </None>
+    <None Include="shaders\msvc_compile_shaders.bat">
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>
