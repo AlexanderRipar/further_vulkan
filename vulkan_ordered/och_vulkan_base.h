@@ -274,6 +274,8 @@ namespace och
 
 		VkPresentModeKHR m_swapchain_present_mode{};
 
+		VkImageUsageFlags m_image_swapchain_usage{};
+
 		VkExtent2D m_swapchain_extent{};
 
 		uint32_t m_swapchain_image_cnt{};

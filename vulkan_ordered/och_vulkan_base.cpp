@@ -431,6 +431,11 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		}
 	}
 
+	// Set allowed swapchain usages
+	{
+		m_image_swapchain_usage = swapchain_image_usage;
+	}
+
 	// Get memory heap- and type-indices for device- and staging-memory
 	{
 		vkGetPhysicalDeviceMemoryProperties(m_physical_device, &m_memory_properties);
@@ -479,6 +484,15 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 
 	glfwGetFramebufferSize(m_window, reinterpret_cast<int*>(&m_swapchain_extent.width), reinterpret_cast<int*>(&m_swapchain_extent.height));
 
+	while (!m_swapchain_extent.width || !m_swapchain_extent.height)
+	{
+		glfwWaitEvents();
+
+		glfwGetFramebufferSize(m_window, reinterpret_cast<int*>(&m_swapchain_extent.width), reinterpret_cast<int*>(&m_swapchain_extent.height));
+	}
+
+	check(vkDeviceWaitIdle(m_device));
+
 	// Get surface capabilities for current pre-transform
 
 	VkSurfaceCapabilitiesKHR surface_capabilites;
@@ -504,7 +518,7 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	swapchain_ci.imageColorSpace = m_swapchain_colorspace;
 	swapchain_ci.imageExtent = m_swapchain_extent;
 	swapchain_ci.imageArrayLayers = 1;
-	swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapchain_ci.imageUsage = m_image_swapchain_usage;
 	swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	swapchain_ci.queueFamilyIndexCount = 0;
 	swapchain_ci.pQueueFamilyIndices = nullptr;
