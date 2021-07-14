@@ -8,29 +8,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL och_vulkan_debug_callback(VkDebugUtilsMessageSeve
 
 	const char* severity_msg = nullptr, * type_msg = nullptr;
 
-	switch (severity)
-	{
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-		severity_msg = "verbose"; break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		severity_msg = "info"; break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-		severity_msg = "WARNING"; break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-		severity_msg = "ERROR"; break;
-	}
+	if(severity != VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		if (callback_data->messageIdNumber == 0) // Ignore Loader Message (loaderAddLayerProperties invalid layer manifest file version)
+			return VK_FALSE;
 
-	switch (type)
-	{
-	case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-		type_msg = "general"; break;
-	case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-		type_msg = "performance"; break;
-	case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-		type_msg = "validation"; break;
-	}
-
-	och::print("{}/{}: {}\n\n", severity_msg, type_msg, callback_data->pMessage);
+	och::print("{}\n\n", callback_data->pMessage);
 
 	return VK_FALSE;
 }
