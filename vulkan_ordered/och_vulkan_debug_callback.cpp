@@ -4,9 +4,7 @@
 
 VKAPI_ATTR VkBool32 VKAPI_CALL och_vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
-	user_data;
-
-	const char* severity_msg = nullptr, * type_msg = nullptr;
+	user_data; type;
 
 	if(severity != VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 		if (callback_data->messageIdNumber == 0) // Ignore Loader Message (loaderAddLayerProperties invalid layer manifest file version)
