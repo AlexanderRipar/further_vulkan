@@ -5,7 +5,7 @@
 namespace och
 {
 	template<typename T>
-	T clamp(const T& val, const T& min, const T& max)
+	T clamp(const T& val, const T& min, const T& max) noexcept
 	{
 		if (val < min)
 			return min;
@@ -17,14 +17,26 @@ namespace och
 	}
 
 	template<typename T>
-	T min(const T& v1, const T& v2)
+	T min(const T& v1, const T& v2) noexcept
 	{
 		return v1 < v2 ? v1 : v2;
 	}
 
 	template<typename T>
-	T max(const T& v1, const T& v2)
+	T max(const T& v1, const T& v2) noexcept
 	{
 		return v1 > v2 ? v1 : v2;
+	}
+
+	template<typename V, typename M>
+	bool contains_all(const V& v, const M& mask) noexcept
+	{
+		return (v & mask) == static_cast<V>(mask);
+	}
+
+	template<typename V, typename M>
+	bool contains_none(const V& v, const M& mask) noexcept
+	{
+		return !(v & mask);
 	}
 }
