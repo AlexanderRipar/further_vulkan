@@ -39,4 +39,54 @@ namespace och
 	{
 		return !(v & mask);
 	}
+
+	inline uint64_t next_pow2(uint64_t n) noexcept
+	{
+		n -= 1;
+
+		n |= n >> 1;
+		n |= n >> 2;
+		n |= n >> 4;
+		n |= n >> 8;
+		n |= n >> 16;
+		n |= n >> 32;
+
+		return n + 1;
+	}
+
+	inline uint32_t next_pow2(uint32_t n)
+	{
+		n -= 1;
+
+		n |= n >> 1;
+		n |= n >> 2;
+		n |= n >> 4;
+		n |= n >> 8;
+		n |= n >> 16;
+
+		return n + 1;
+	}
+
+	inline uint16_t next_pow2(uint16_t n) noexcept
+	{
+		n -= 1;
+
+		n |= n >> 1;
+		n |= n >> 2;
+		n |= n >> 4;
+		n |= n >> 8;
+
+		return n + 1;
+	}
+
+	inline uint8_t next_pow2(uint8_t n) noexcept
+	{
+		n -= 1;
+
+		n |= n >> 1;
+		n |= n >> 2;
+		n |= n >> 4;
+
+		return n + 1;
+	}
 }
