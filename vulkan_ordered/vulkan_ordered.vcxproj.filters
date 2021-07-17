@@ -16,20 +16,20 @@
     <Filter Include="och_lib">
       <UniqueIdentifier>{58ec9fa0-8a61-47f9-9024-380f87933e1d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="sample_h">
-      <UniqueIdentifier>{07d88a54-8bbb-45c7-97e3-e9c6a889f4fc}</UniqueIdentifier>
+    <Filter Include="samples">
+      <UniqueIdentifier>{d360b6cf-fc09-4d25-b584-5a5ea995913f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="sample_cpp">
-      <UniqueIdentifier>{abc6907f-9a28-4cdb-a28c-e760500af7d2}</UniqueIdentifier>
+    <Filter Include="samples\vulkan_tutorial">
+      <UniqueIdentifier>{e255b8f7-f674-4bfa-bfcf-503d891ff06e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="shaders">
-      <UniqueIdentifier>{538dcb7c-5f08-4dfe-98a1-168a01375f3a}</UniqueIdentifier>
+    <Filter Include="samples\compute_buffer_copy">
+      <UniqueIdentifier>{1d493bcc-fe90-423c-884c-efb46cd1ec90}</UniqueIdentifier>
     </Filter>
-    <Filter Include="shaders\shaders_spv">
-      <UniqueIdentifier>{5642e9a0-26b7-47d8-b4a9-5466fbe28313}</UniqueIdentifier>
+    <Filter Include="samples\compute_to_swapchain">
+      <UniqueIdentifier>{9efec8c9-34a1-414f-b638-a2ccdf0e6d2f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="shaders\shaders_glsl">
-      <UniqueIdentifier>{e83856c9-126e-40fe-8173-d6aea3c00c0b}</UniqueIdentifier>
+    <Filter Include="samples\font">
+      <UniqueIdentifier>{d4937fdd-d47d-440f-8e39-a753616f75d2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -51,23 +51,26 @@
     <ClCompile Include="och_error_handling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="och_bmp_header.h">
+    <ClCompile Include="bitmap_header.h">
       <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="och_vulkan_debug_callback.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="compute_buffer_copy.cpp">
-      <Filter>sample_cpp</Filter>
-    </ClCompile>
-    <ClCompile Include="vulkan_tutorial.cpp">
-      <Filter>sample_cpp</Filter>
-    </ClCompile>
-    <ClCompile Include="compute_to_swapchain.cpp">
-      <Filter>sample_cpp</Filter>
-    </ClCompile>
     <ClCompile Include="och_vulkan_base.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan_tutorial.cpp">
+      <Filter>samples\vulkan_tutorial</Filter>
+    </ClCompile>
+    <ClCompile Include="compute_buffer_copy.cpp">
+      <Filter>samples\compute_buffer_copy</Filter>
+    </ClCompile>
+    <ClCompile Include="compute_to_swapchain.cpp">
+      <Filter>samples\compute_to_swapchain</Filter>
+    </ClCompile>
+    <ClCompile Include="sdf_font.cpp">
+      <Filter>samples\font</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -119,49 +122,79 @@
     <ClInclude Include="och_helpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="compute_buffer_copy.h">
-      <Filter>sample_h</Filter>
+    <ClInclude Include="och_vulkan_base.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="vulkan_tutorial.h">
-      <Filter>sample_h</Filter>
+      <Filter>samples\vulkan_tutorial</Filter>
+    </ClInclude>
+    <ClInclude Include="compute_buffer_copy.h">
+      <Filter>samples\compute_buffer_copy</Filter>
     </ClInclude>
     <ClInclude Include="compute_to_swapchain.h">
-      <Filter>sample_h</Filter>
+      <Filter>samples\compute_to_swapchain</Filter>
     </ClInclude>
-    <ClInclude Include="och_vulkan_base.h">
+    <ClInclude Include="sdf_font.h">
+      <Filter>samples\font</Filter>
+    </ClInclude>
+    <ClInclude Include="sdf_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="binary_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="texels.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="bitmap_file.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\fragment.glsl">
-      <Filter>shaders\shaders_glsl</Filter>
-    </None>
-    <None Include="shaders\vertex.glsl">
-      <Filter>shaders\shaders_glsl</Filter>
-    </None>
-    <None Include="shaders\compute_copy.glsl">
-      <Filter>shaders\shaders_glsl</Filter>
-    </None>
-    <None Include="shaders\compute_swapchain.glsl">
-      <Filter>shaders\shaders_glsl</Filter>
-    </None>
-    <None Include="shaders\compute_simplex.glsl">
-      <Filter>shaders\shaders_glsl</Filter>
-    </None>
-    <None Include="shaders\compute_copy.spv">
-      <Filter>shaders\shaders_spv</Filter>
-    </None>
-    <None Include="shaders\compute_swapchain.spv">
-      <Filter>shaders\shaders_spv</Filter>
-    </None>
-    <None Include="shaders\frag.spv">
-      <Filter>shaders\shaders_spv</Filter>
-    </None>
-    <None Include="shaders\vert.spv">
-      <Filter>shaders\shaders_spv</Filter>
-    </None>
     <None Include="shaders\msvc_compile_shaders.bat">
-      <Filter>shaders</Filter>
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="shaders\tutorial.vert">
+      <Filter>samples\vulkan_tutorial</Filter>
+    </None>
+    <None Include="shaders\tutorial.frag.spv">
+      <Filter>samples\vulkan_tutorial</Filter>
+    </None>
+    <None Include="shaders\tutorial.vert.spv">
+      <Filter>samples\vulkan_tutorial</Filter>
+    </None>
+    <None Include="shaders\tutorial.frag">
+      <Filter>samples\vulkan_tutorial</Filter>
+    </None>
+    <None Include="shaders\swapchain.comp.spv">
+      <Filter>samples\compute_to_swapchain</Filter>
+    </None>
+    <None Include="shaders\swapchain.comp">
+      <Filter>samples\compute_to_swapchain</Filter>
+    </None>
+    <None Include="shaders\simplex3d.comp.spv">
+      <Filter>samples\compute_to_swapchain</Filter>
+    </None>
+    <None Include="shaders\simplex3d.comp">
+      <Filter>samples\compute_to_swapchain</Filter>
+    </None>
+    <None Include="shaders\buffer_copy.comp.spv">
+      <Filter>samples\compute_buffer_copy</Filter>
+    </None>
+    <None Include="shaders\buffer_copy.comp">
+      <Filter>samples\compute_buffer_copy</Filter>
+    </None>
+    <None Include="shaders\sdf_font.vert">
+      <Filter>samples\font</Filter>
+    </None>
+    <None Include="shaders\sdf_font.vert.spv">
+      <Filter>samples\font</Filter>
+    </None>
+    <None Include="shaders\sdf_font.frag">
+      <Filter>samples\font</Filter>
+    </None>
+    <None Include="shaders\sdf_font.frag.spv">
+      <Filter>samples\font</Filter>
     </None>
   </ItemGroup>
 </Project>
