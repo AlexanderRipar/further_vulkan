@@ -1,6 +1,8 @@
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=vert vertex.glsl -o vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=frag fragment.glsl -o frag.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp compute_copy.glsl -o compute_copy.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp compute_swapchain.glsl -o compute_swapchain.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp compute_simplex.glsl -o compute_simplex.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     tutorial.vert      -o     tutorial.vert.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     tutorial.frag      -o     tutorial.frag.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     buffer_copy.comp   -o     buffer_copy.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     swapchain.comp     -o     swapchain.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     simplex3d.comp     -o     simplex3d.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     sdf_font.vert      -o     sdf_font.vert.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     sdf_font.frag      -o     sdf_font.frag.spv
 pause

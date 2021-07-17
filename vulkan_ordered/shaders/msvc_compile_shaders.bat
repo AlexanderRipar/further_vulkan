@@ -1,5 +1,7 @@
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=vert C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\vertex.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=frag C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\fragment.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\frag.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_copy.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_copy.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_swapchain.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_swapchain.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe -fshader-stage=comp C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_simplex.glsl -o C:\Users\alex_2\source\repos\vulkan_ordered\vulkan_ordered\shaders\compute_simplex.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\tutorial.vert      -o     shaders\tutorial.vert.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\tutorial.frag      -o     shaders\tutorial.frag.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\buffer_copy.comp   -o     shaders\buffer_copy.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\swapchain.comp     -o     shaders\swapchain.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\simplex3d.comp     -o     shaders\simplex3d.comp.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\sdf_font.frag      -o     shaders\sdf_font.frag.spv
+C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\sdf_font.vert      -o     shaders\sdf_font.vert.spv
