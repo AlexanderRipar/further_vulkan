@@ -51,9 +51,6 @@
     <ClCompile Include="och_error_handling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="bitmap_header.h">
-      <Filter>Header Files</Filter>
-    </ClCompile>
     <ClCompile Include="och_vulkan_base.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -137,7 +134,7 @@
     <ClInclude Include="texels.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="bitmap_file.h">
+    <ClInclude Include="bitmap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="tiny_obj_loader.h">
