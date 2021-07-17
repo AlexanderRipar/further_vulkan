@@ -35,7 +35,7 @@ och::err_info testing() noexcept
 {
 	binary_image bin_img;
 
-	check(bin_img.load_bmp("textures/sdf_src.bmp"));
+	check(bin_img.load_bmp("textures/sdf_src.bmp", [](texel_b8g8r8 col) noexcept { return col.r > 40; }));
 
 	sdf_image sdf_img;
 
