@@ -1,6 +1,6 @@
 #pragma once
 
-#include "och_bmp_header.h"
+#include "bitmap_header.h"
 
 #include "och_fio.h"
 

@@ -7,7 +7,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "och_bmp_header.h"
+#include "bitmap_header.h"
 #include "och_vulkan_debug_callback.h"
 #include "och_timer.h"
 #include "och_fmt.h"

@@ -8,7 +8,7 @@
 
 #include "och_fio.h"
 
-#include "och_bmp_header.h"
+#include "bitmap_header.h"
 
 #include "binary_image.h"
 
