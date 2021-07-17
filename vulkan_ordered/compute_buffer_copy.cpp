@@ -54,7 +54,7 @@ struct simple_compute_buffer_copy
 
 	och::err_info create() noexcept
 		{
-			check(context.create("Simple Compute", 1440, 810, 1, 1, 0, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
+			check(context.create("Compute Buffer Copy", 1440, 810, 1, 1, 0, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
 
 			// Allocate Buffers
 			{
@@ -130,7 +130,7 @@ struct simple_compute_buffer_copy
 
 				check(vkCreatePipelineLayout(context.m_device, &pipeline_layout_ci, nullptr, &pipeline_layout));
 
-				check(context.load_shader_module_file(shader_module, "shaders/compute_copy.spv"));
+				check(context.load_shader_module_file(shader_module, "shaders/buffer_copy.comp.spv"));
 
 				struct { uint32_t x, y, z; } group_size{ COMPUTE_GROUP_SZ, 1, 1 };
 

@@ -8,10 +8,7 @@
 #include "och_helpers.h"
 #include "och_heap_buffer.h"
 
-struct push_constant_data
-{
-	och::vec4 colour;
-};
+#define USE_SIMPLEX
 
 struct compute_image_to_swapchain
 {
@@ -39,13 +36,13 @@ struct compute_image_to_swapchain
 
 
 
-	VkDescriptorSet descriptor_sets[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
-
 	VkDescriptorPool descriptor_pool;
 
-	VkCommandBuffer command_buffers[MAX_FRAMES_INFLIGHT]{};
+	VkDescriptorSet descriptor_sets[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
 	VkCommandPool command_pool{};
+
+	VkCommandBuffer command_buffers[MAX_FRAMES_INFLIGHT]{};
 
 
 	VkSemaphore image_available_semaphores[MAX_FRAMES_INFLIGHT]{};
@@ -62,8 +59,12 @@ struct compute_image_to_swapchain
 
 
 
-	och::err_info create() noexcept
+	bool is_using_simplex;
+
+	och::err_info create(bool use_simplex) noexcept
 	{
+		is_using_simplex = use_simplex;
+
 		check(context.create("Compute to Swapchain", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
 
 		// Create Compute Pipeline
@@ -87,7 +88,7 @@ struct compute_image_to_swapchain
 			VkPushConstantRange push_constant_range{};
 			push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 			push_constant_range.offset = 0;
-			push_constant_range.size = sizeof(push_constant_data);
+			push_constant_range.size = sizeof(och::vec4);
 
 			VkPipelineLayoutCreateInfo pipeline_layout_ci{};
 			pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -100,7 +101,7 @@ struct compute_image_to_swapchain
 
 			check(vkCreatePipelineLayout(context.m_device, &pipeline_layout_ci, nullptr, &pipeline_layout));
 
-			check(context.load_shader_module_file(shader_module, "shaders/compute_simplex.spv"));
+			check(context.load_shader_module_file(shader_module, is_using_simplex ? "shaders/simplex3d.comp.spv" : "shaders/swapchain.comp.spv"));
 
 			struct { uint32_t x, y, z; } group_size{ GROUP_SZ_X, GROUP_SZ_Y, GROUP_SZ_Z };
 
@@ -310,10 +311,8 @@ struct compute_image_to_swapchain
 
 	void destroy() const noexcept
 	{
-		if (vkDeviceWaitIdle(context.m_device) != VK_SUCCESS)
+		if (!context.m_device || vkDeviceWaitIdle(context.m_device) != VK_SUCCESS)
 			return;
-
-		if (!context.m_device) return;
 
 		for (auto& s : image_available_semaphores)
 			vkDestroySemaphore(context.m_device, s, nullptr);
@@ -343,15 +342,22 @@ struct compute_image_to_swapchain
 	{
 		och::timespan delta_t = och::time::now() - creation_time;
 
-		//constexpr float cycle_len = 512.0F;
-		//
-		//float r = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 0.0F) / cycle_len);
-		//float b = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 1.0F) / cycle_len);
-		//float g = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 2.0F) / cycle_len);
-		//
-		//och::vec4 push_constant_data{ r, g, b, 1.0F };
+		och::vec4 push_constant_data;
 
-		och::vec4 push_constant_data{ 0.0F, static_cast<float>(delta_t.milliseconds()) / 2048.0F, static_cast<float>(delta_t.milliseconds()) / 8192.0F, 0.02F };
+		if (is_using_simplex)
+		{
+			push_constant_data = { static_cast<float>(delta_t.milliseconds()) / 3000.0F, static_cast<float>(delta_t.milliseconds()) / 2048.0F, static_cast<float>(delta_t.milliseconds()) / 8192.0F, 0.02F };
+		}
+		else
+		{
+			constexpr float cycle_len = 512.0F;
+
+			float r = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 0.0F) / cycle_len);
+			float b = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 1.0F) / cycle_len);
+			float g = cosf((delta_t.milliseconds() + cycle_len / 3.0F * 2.0F) / cycle_len);
+
+			push_constant_data = { r, g, b, 1.0F };
+		}
 
 		VkCommandBufferBeginInfo begin_info{};
 		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -500,11 +506,11 @@ struct compute_image_to_swapchain
 	}
 };
 
-och::err_info run_compute_to_swapchain() noexcept
+och::err_info run_compute_to_swapchain(bool use_simplex) noexcept
 {
 	compute_image_to_swapchain program;
 
-	och::err_info err = program.create();
+	och::err_info err = program.create(use_simplex);
 
 	if (!err)
 		program.run();

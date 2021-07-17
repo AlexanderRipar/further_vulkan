@@ -347,11 +347,11 @@ struct vulkan_tutorial
 	{
 		VkShaderModule vert_shader_module;
 
-		check(create_shader_module_from_file("shaders/vert.spv", vert_shader_module));
+		check(create_shader_module_from_file("shaders/tutorial.vert.spv", vert_shader_module));
 
 		VkShaderModule frag_shader_module;
 
-		check(create_shader_module_from_file("shaders/frag.spv", frag_shader_module));
+		check(create_shader_module_from_file("shaders/tutorial.frag.spv", frag_shader_module));
 
 		VkPipelineShaderStageCreateInfo shader_info[2]{};
 		shader_info[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -536,9 +536,9 @@ struct vulkan_tutorial
 		if (!texture_file)
 			return MAKE_ERROR(1);
 
-		const bitmap_header& header = texture_file[0];
+		bitmap_header& header = texture_file[0];
 
-		const uint8_t* pixels = header.pixel_data();
+		const uint8_t* pixels = header.raw_image_data();
 
 		const size_t pixel_cnt = static_cast<size_t>(header.width * header.height);
 
