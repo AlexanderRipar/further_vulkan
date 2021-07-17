@@ -223,7 +223,6 @@
     <ClCompile Include="..\..\och_lib\och_lib\och_utf8.cpp" />
     <ClCompile Include="sdf_font.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="bitmap_header.h" />
     <ClCompile Include="compute_to_swapchain.cpp" />
     <ClCompile Include="och_error_handling.cpp" />
     <ClCompile Include="compute_buffer_copy.cpp" />
@@ -243,7 +242,7 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_utf8.h" />
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h" />
     <ClInclude Include="binary_image.h" />
-    <ClInclude Include="bitmap_file.h" />
+    <ClInclude Include="bitmap.h" />
     <ClInclude Include="texels.h" />
     <ClInclude Include="sdf_font.h" />
     <ClInclude Include="och_heap_buffer.h" />

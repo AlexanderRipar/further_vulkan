@@ -7,7 +7,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "bitmap_header.h"
+#include "bitmap.h"
 #include "och_timer.h"
 #include "och_fmt.h"
 #include "och_fio.h"

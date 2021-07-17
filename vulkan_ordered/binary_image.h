@@ -6,7 +6,7 @@
 
 #include "och_error_handling.h"
 
-#include "bitmap_file.h"
+#include "bitmap.h"
 
 struct binary_image
 {
