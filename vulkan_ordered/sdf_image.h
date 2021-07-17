@@ -93,24 +93,14 @@ public:
 
 	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = [](float dst) noexcept { uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); return dst < 0.0F ? texel_b8g8r8(c, c >> 1, 0) : texel_b8g8r8(c, c, c); })
 	{
-		constexpr uint32_t bmp_image_data_offset = 64;
-
-		static_assert(bmp_image_data_offset >= sizeof(bitmap_header));
-
-		const uint32_t file_sz = bitmap_header::allocation_size(bmp_image_data_offset, m_width, m_height);
-
-		och::mapped_file<bitmap_header> file(filename, och::fio::access_readwrite, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, och::fio::open_normal, file_sz);
+		bitmap_file file(filename, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, m_width, m_height);
 
 		if (!file)
-			return MSG_ERROR("Could not open bmp-file for writing");
-
-		file[0].initialize(file_sz, bmp_image_data_offset, m_width, m_height);
-
-		bitmap_image_data image = file[0].image_data();
+			return MSG_ERROR("Could not open file");
 
 		for (int32_t y = 0; y != m_height; ++y)
 			for (int32_t x = 0; x != m_width; ++x)
-				image(x, y) = colour_mapper(m_data[x + y * m_width]);
+				file(x, y) = colour_mapper(m_data[x + y * m_width]);
 
 		return {};
 	}

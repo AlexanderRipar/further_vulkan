@@ -54,9 +54,6 @@
     <ClCompile Include="bitmap_header.h">
       <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="och_vulkan_debug_callback.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="och_vulkan_base.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -108,9 +105,6 @@
       <Filter>och_lib</Filter>
     </ClInclude>
     <ClInclude Include="och_error_handling.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="och_vulkan_debug_callback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="och_heap_buffer.h">

@@ -4,25 +4,6 @@
 
 #include "texels.h"
 
-struct bitmap_image_data
-{
-	uint8_t* m_data;
-
-	uint32_t m_stride;
-
-	bitmap_image_data(uint8_t* data, uint32_t stride) noexcept : m_data{ data }, m_stride{ stride } {}
-
-	texel_b8g8r8& operator()(uint32_t x, uint32_t y) noexcept
-	{
-		return reinterpret_cast<texel_b8g8r8*>(m_data + y * m_stride)[x];
-	}
-
-	const texel_b8g8r8& operator()(uint32_t x, uint32_t y) const noexcept
-	{
-		return reinterpret_cast<const texel_b8g8r8*>(m_data + y * m_stride)[x];
-	}
-};
-
 #pragma pack(push, 1)
 struct bitmap_header
 {
@@ -45,11 +26,6 @@ struct bitmap_header
 	uint32_t vertical_resolution;
 	uint32_t colour_palette_count;
 	uint32_t important_colour_count;
-
-	bitmap_image_data image_data() noexcept
-	{
-		return { reinterpret_cast<uint8_t*>(this) + image_offset, stride(width) };
-	}
 
 	uint8_t* raw_image_data() noexcept
 	{

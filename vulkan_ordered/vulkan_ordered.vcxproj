@@ -228,7 +228,6 @@
     <ClCompile Include="och_error_handling.cpp" />
     <ClCompile Include="compute_buffer_copy.cpp" />
     <ClCompile Include="och_vulkan_base.cpp" />
-    <ClCompile Include="och_vulkan_debug_callback.cpp" />
     <ClCompile Include="vulkan_tutorial.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -252,7 +251,6 @@
     <ClInclude Include="och_helpers.h" />
     <ClInclude Include="compute_buffer_copy.h" />
     <ClInclude Include="compute_to_swapchain.h" />
-    <ClInclude Include="och_vulkan_debug_callback.h" />
     <ClInclude Include="och_vulkan_base.h" />
     <ClInclude Include="sdf_image.h" />
     <ClInclude Include="vulkan_tutorial.h" />
