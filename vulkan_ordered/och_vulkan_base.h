@@ -4,7 +4,6 @@
 
 #include <GLFW/glfw3.h>
 
-#include "och_vulkan_debug_callback.h"
 #include "och_error_handling.h"
 #include "och_heap_buffer.h"
 #include "och_helpers.h"

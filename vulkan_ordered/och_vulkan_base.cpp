@@ -5,6 +5,19 @@
 #include "och_fmt.h"
 #include "och_fio.h"
 
+VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
+{
+	user_data; type;
+
+	if (severity != VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		if (callback_data->messageIdNumber == 0) // Ignore Loader Message (loaderAddLayerProperties invalid layer manifest file version)
+			return VK_FALSE;
+
+	och::print("{}\n\n", callback_data->pMessage);
+
+	return VK_FALSE;
+}
+
 void vulkan_context_resize_callback(GLFWwindow* window, int width, int height)
 {
 	width, height;
@@ -41,7 +54,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 	messenger_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 	messenger_ci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 	messenger_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-	messenger_ci.pfnUserCallback = och_vulkan_debug_callback;
+	messenger_ci.pfnUserCallback = vulkan_debug_callback;
 
 	// Create instance
 	{
