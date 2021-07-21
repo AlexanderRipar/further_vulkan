@@ -243,6 +243,7 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h" />
     <ClInclude Include="binary_image.h" />
     <ClInclude Include="bitmap.h" />
+    <ClInclude Include="opentype_file.h" />
     <ClInclude Include="texels.h" />
     <ClInclude Include="sdf_font.h" />
     <ClInclude Include="och_heap_buffer.h" />

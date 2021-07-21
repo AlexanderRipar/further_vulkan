@@ -140,6 +140,9 @@
     <ClInclude Include="tiny_obj_loader.h">
       <Filter>samples\vulkan_tutorial</Filter>
     </ClInclude>
+    <ClInclude Include="opentype_file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\msvc_compile_shaders.bat">

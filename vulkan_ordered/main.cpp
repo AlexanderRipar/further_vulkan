@@ -20,6 +20,11 @@
 
 #include "sdf_image.h"
 
+#include "opentype_file.h"
+
+#include <cstdio>
+#include <Windows.h>
+
 enum class sample_type
 {
 	none,
@@ -31,7 +36,7 @@ enum class sample_type
 	sdf_font,
 };
 
-och::err_info testing() noexcept
+och::err_info image_testing() noexcept
 {
 	binary_image bin_img;
 
@@ -42,6 +47,25 @@ och::err_info testing() noexcept
 	check(sdf_img.from_bim(bin_img));
 
 	check(sdf_img.save_bmp("textures/sdf_dst.bmp", true));
+
+	return {};
+}
+
+och::err_info font_testing() noexcept
+{
+	opentype_file file("C:\\Windows\\Fonts\\consola.ttf");
+
+	if (!file)
+		return MSG_ERROR("Could not open file");
+
+	file[U'H'];
+
+	return {};
+}
+
+och::err_info testing() noexcept
+{
+	check(font_testing());
 
 	return {};
 }
