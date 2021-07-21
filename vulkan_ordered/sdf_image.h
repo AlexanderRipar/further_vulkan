@@ -82,7 +82,7 @@ public:
 
 		free(neg);
 
-		const float normalization_fct = 1.0F / och::max(m_width, m_height);
+		const float normalization_fct = 1.0F / sqrtf(static_cast<float>(m_width * m_width + m_height * m_height));
 
 		for (int32_t y = 0; y != m_height; ++y)
 			for (int32_t x = 0; x != m_width; ++x)
