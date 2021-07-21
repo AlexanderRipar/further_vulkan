@@ -45,10 +45,16 @@ namespace och
 	uint64_t get_errcode() noexcept;
 
 	error_type get_errtype() noexcept;
+	
+#define CONSTEXPR_LINE_NUM_CAT_HELPER2(x, y) x##y
 
-#define check(macro_error_cause) {static constexpr och::error_context macro_defined_ctx{__FILE__, __FUNCTION__, #macro_error_cause, __LINE__}; if(och::err_info macro_result = och::err_info(macro_error_cause, macro_defined_ctx)) return macro_result; }
+#define CONSTEXPR_LINE_NUM_CAT_HELPER(x, y) CONSTEXPR_LINE_NUM_CAT_HELPER2(x, y)
 
-#define MAKE_ERROR(macro_num) och::err_info(static_cast<uint64_t>(macro_num), och::error_context{__FILE__, __FUNCTION__, #macro_num, __LINE__})
+#define CONSTEXPR_LINE_NUM CONSTEXPR_LINE_NUM_CAT_HELPER(__LINE__, u)
 
-#define MSG_ERROR(macro_msg) och::err_info(1ull, och::error_context(__FILE__, __FUNCTION__, macro_msg, __LINE__));
+#define check(macro_error_cause) {static constexpr och::error_context macro_defined_ctx{__FILE__, __FUNCTION__, #macro_error_cause, CONSTEXPR_LINE_NUM}; if(och::err_info macro_result = och::err_info(macro_error_cause, macro_defined_ctx)) return macro_result; }
+
+#define MAKE_ERROR(macro_num) och::err_info(static_cast<uint64_t>(macro_num), och::error_context{__FILE__, __FUNCTION__, #macro_num, CONSTEXPR_LINE_NUM})
+
+#define MSG_ERROR(macro_msg) och::err_info(1ull, och::error_context(__FILE__, __FUNCTION__, macro_msg, CONSTEXPR_LINE_NUM));
 }
