@@ -98,16 +98,16 @@ och::err_info write_glyph_info(const opentype_file& file, char32_t codept)
 		{
 			glyph_point p = c[j];
 
-			och::print("{:3>}:   ({},{})\n", j, p.x(), p.y());
+			och::print("{:3>}:   ({},{})\n", j, p.x, p.y);
 		}
 	}
 
 	for (uint16_t i = 0; i != glyph.point_cnt(); ++i)
 	{
 		glyph_point p = glyph.get_point(i);
-
-		int32_t px = static_cast<int32_t>(p.x() * bmp_sz_x);
-		int32_t py = static_cast<int32_t>(p.y() * bmp_sz_y);
+		
+		int32_t px = static_cast<int32_t>(p.x * bmp_sz_x);
+		int32_t py = static_cast<int32_t>(p.y * bmp_sz_y);
 
 		if (px < 0)
 			px = 0;
@@ -115,7 +115,7 @@ och::err_info write_glyph_info(const opentype_file& file, char32_t codept)
 		if (py < 0)
 			py = 0;
 
-		glyph_bmp(px, py) = p.is_on_line() ? texel_b8g8r8(0x00, 0x7F, 0xFF) : texel_b8g8r8(0xD0, 0x7F, 0x00);
+		glyph_bmp(px, py) = glyph.is_point_on_curve(i) ? texel_b8g8r8(0x00, 0x7F, 0xFF) : texel_b8g8r8(0xD0, 0x7F, 0x00);
 	}
 
 	och::print("\n\n");

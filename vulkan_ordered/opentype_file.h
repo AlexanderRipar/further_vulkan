@@ -28,32 +28,7 @@ __forceinline int32_t be_to_le(int32_t v) noexcept
 
 struct glyph_point
 {
-	float m_x, m_y;
-
-	float x() const noexcept
-	{
-		uint32_t ix;
-
-		memcpy(&ix, &m_x, 4);
-
-		ix &= ~(1 << 31);
-
-		float rx;
-
-		memcpy(&rx, &ix, 4);
-
-		return rx;
-	}
-
-	float y() const noexcept 
-	{ 
-		return m_y; 
-	}
-
-	bool is_on_line() const noexcept 
-	{ 
-		return m_x < 0.0F; 
-	}
+	float x, y;
 };
 
 struct glyph_contour
@@ -146,6 +121,11 @@ public:
 	}
 
 	glyph_point get_point(uint32_t point_idx) const noexcept { return m_points[point_idx]; }
+
+	bool is_point_on_curve(uint32_t point_idx) const noexcept
+	{
+		return reinterpret_cast<const uint8_t*>(reinterpret_cast<const uint32_t*>(m_points + m_point_cnt) + m_contour_cnt)[point_idx >> 3] & (1 << (point_idx & 7));
+	}
 
 	float x_min() const noexcept { return m_metrics.x_min(); }
 
@@ -318,13 +298,28 @@ private:
 
 		uint32_t* contour_end_indices() noexcept { return reinterpret_cast<uint32_t*>(m_points + point_cnt); }
 
-		void create(uint32_t point_cnt_, uint32_t contour_cnt_)
+		void set_on_curve(uint32_t point_idx) noexcept
+		{
+			reinterpret_cast<uint8_t*>(contour_end_indices() + contour_cnt)[point_idx >> 3] |= 1 << (point_idx & 7);
+		}
+
+		void set_off_curve(uint32_t point_idx) noexcept
+		{
+			reinterpret_cast<uint8_t*>(contour_end_indices() + contour_cnt)[point_idx >> 3] &= ~(1 << (point_idx & 7));
+		}
+
+		bool is_on_line(uint32_t point_idx) noexcept
+		{
+			return reinterpret_cast<const uint8_t*>(contour_end_indices() + contour_cnt)[point_idx >> 3] & (1 << (point_idx & 7));
+		}
+
+		void create(uint32_t point_cnt_, uint32_t contour_cnt_) noexcept
 		{
 			point_cnt = point_cnt_;
 
 			contour_cnt = contour_cnt_;
 
-			m_points = static_cast<glyph_point*>(malloc(point_cnt_ * sizeof(glyph_point) + contour_cnt_ * sizeof(uint32_t)));
+			m_points = static_cast<glyph_point*>(malloc(point_cnt_ * sizeof(glyph_point) + contour_cnt_ * sizeof(uint32_t) + (point_cnt_ + 7) / 8));
 		}
 
 		void destroy() noexcept
@@ -337,29 +332,14 @@ private:
 			return glyph_data(contour_cnt, point_cnt, metrics, m_points);
 		}
 
-		// Only for use with unflagged points for rhs!
-		static void translate_glyph_point(glyph_point& lhs, float dx, float dy)
-		{
-			if (lhs.is_on_line())
-				lhs.m_x = -(lhs.x() + dx);
-			else
-				lhs.m_x += dx;
-
-			lhs.m_y += dy;
-		}
-
 		void translate(float dx, float dy) noexcept
 		{
 			for (uint32_t i = 0; i != point_cnt; ++i)
 			{
 				glyph_point& p = m_points[i];
 
-				if (p.is_on_line())
-					p.m_x -= dx;
-				else
-					p.m_x += dx;
-
-				p.m_y += dy;
+				p.x += dx;
+				p.y += dy;
 			}
 		}
 
@@ -369,33 +349,21 @@ private:
 			{
 				glyph_point& p = m_points[i];
 
-				p.m_x *= sx;
-				p.m_y *= sy;
+				p.x *= sx;
+				p.y *= sy;
 			}
 		}
 
-		void transform(float xx, float xy, float yx, float yy)
+		void transform(float xx, float xy, float yx, float yy) noexcept
 		{
 			for (uint32_t i = 0; i != point_cnt; ++i)
 			{
 				glyph_point& p = m_points[i];
 
-				float ax = p.x();
-
-				float rx = ax * xx + p.m_y * xy;
-
-				float ry = ax * yx + p.m_y * yy;
-
-				if (p.is_on_line())
-					p.m_x = -rx;
-				else
-					p.m_x = rx;
-
-				p.m_y = ry;
+				p.x = p.x * xx + p.y * xy;
+				p.y = p.x * yx + p.y * yy;
 			}
 		}
-
-		// internal_glyph_data merge(internal_glyph_data& a, internal_glyph_data& b)
 	};
 
 
@@ -667,7 +635,7 @@ private:
 
 	internal_glyph_data get_glyph_data_recursive(uint32_t glyph_id, uint32_t& out_glyph_id_for_metrics_to_use) const noexcept
 	{
-		// If this is violated, something went wrong in the character mapper. Uh-Oh.
+		// If this does not hold, something went wrong in the character mapper. Uh-Oh.
 		assert(glyph_id < m_glyph_cnt);
 
 		const glyph_header* header = find_glyph(glyph_id);
@@ -721,7 +689,7 @@ private:
 				}
 			}
 
-			// If this is not true, there was an error while expanding the raw flags array
+			// If this does not hold, there was an error while expanding the raw flags array
 			assert(write_idx == point_cnt);
 
 			int16_t prev_x = 0;
@@ -745,10 +713,12 @@ private:
 
 				const int16_t new_x = prev_x + delta_x;
 
-				ret.points()[i].m_x = new_x * m_normalization_factor;
+				ret.points()[i].x = new_x * m_normalization_factor;
 
 				if (decoded_flags[i] & ON_CURVE_POINT)
-					ret.points()[i].m_x = -ret.points()[i].m_x;
+					ret.set_on_curve(i);
+				else
+					ret.set_off_curve(i);
 
 				prev_x = new_x;
 			}
@@ -774,35 +744,12 @@ private:
 
 				const int32_t new_y = prev_y + delta_y;
 
-				ret.points()[i].m_y = new_y * m_normalization_factor;
+				ret.points()[i].y = new_y * m_normalization_factor;
 
 				prev_y = new_y;
 			}
 
 			free(decoded_flags);
-
-			och::print("\n----------------------------------\n"
-				"----------Glyph {:18~-}\n"
-				"----------------------------------\n\n", glyph_id);
-
-			och::print("Contour_cnt: {}\n", ret.contour_cnt);
-
-			for (uint32_t i = 0; i != ret.contour_cnt; ++i)
-				och::print("End index #{}: {}\n", i, ret.contour_end_indices()[i]);
-
-			uint32_t contour_beg = 0;
-
-			for (uint32_t j = 0; j != ret.contour_cnt; ++j)
-			{
-				for (uint32_t k = contour_beg; k != ret.contour_end_indices()[j] + 1; ++k)
-					och::print("   {:3>}:   ({},{})\n", k - contour_beg, ret.points()[k].x(), ret.points()[k].y());
-
-				och::print("\n");
-
-				contour_beg = ret.contour_end_indices()[j] + 1;
-			}
-
-			och::print("\n");
 
 			return ret;
 		}
@@ -883,9 +830,9 @@ private:
 
 						const glyph_point& matched_new = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg2));
 
-						float dx = matched_old.x() - matched_new.x();
+						float dx = matched_old.x - matched_new.x;
 
-						float dy = matched_old.y() - matched_new.y();
+						float dy = matched_old.y - matched_new.y;
 
 						curr_component.translate(dx, dy);
 					}
@@ -934,9 +881,9 @@ private:
 
 						const glyph_point& matched_new = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg2));
 
-						float dx = matched_old.x() - matched_new.x();
+						float dx = matched_old.x - matched_new.x;
 
-						float dy = matched_old.y() - matched_new.y();
+						float dy = matched_old.y - matched_new.y;
 
 						curr_component.translate(dx, dy);
 					}
@@ -963,6 +910,9 @@ private:
 
 				for (uint16_t j = 0; j != components[i].contour_cnt; ++j)
 					ret.contour_end_indices()[contour_idx + j] = components[i].contour_end_indices()[j] + point_idx;
+
+				for (uint16_t j = 0; j != components[i].point_cnt; ++j)
+					components[i].is_on_line(j) ? ret.set_on_curve(point_idx + j) : ret.set_off_curve(point_idx + j);
 
 				contour_idx += static_cast<uint16_t>(components[i].contour_cnt);
 
@@ -1064,8 +1014,6 @@ private:
 
 		const encoding_record* curr_encoding = reinterpret_cast<const encoding_record*>(cmap_table + 1);
 
-		och::print("Number of available encodings: {}\n\n", encoding_cnt);
-
 		const encoding_record* unicode_full = nullptr;
 
 		const encoding_record* unicode_bmp = nullptr;
@@ -1077,8 +1025,6 @@ private:
 			uint16_t encoding = be_to_le(curr_encoding->encoding_id);
 
 			uint16_t format = be_to_le(*reinterpret_cast<const uint16_t*>(reinterpret_cast<const uint8_t*>(cmap_table) + be_to_le(curr_encoding->table_offset)));
-
-			och::print("platform: {}\nencoding:{}\nformat:{}\n\n", be_to_le(curr_encoding->platform_id), be_to_le(curr_encoding->encoding_id), format);
 
 			// Select best encoding
 
