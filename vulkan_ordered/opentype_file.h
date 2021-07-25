@@ -26,130 +26,144 @@ __forceinline int32_t be_to_le(int32_t v) noexcept
 }
 
 
-namespace fnt
+struct glyph_point
 {
-	struct point
+	float m_x, m_y;
+
+	float x() const noexcept
 	{
-		float m_x, m_y;
+		uint32_t ix;
 
-		float x() const noexcept
-		{
-			uint32_t ix;
+		memcpy(&ix, &m_x, 4);
 
-			memcpy(&ix, &m_x, 4);
+		ix &= ~(1 << 31);
 
-			ix &= ~(1 << 31);
+		float rx;
 
-			float rx;
+		memcpy(&rx, &ix, 4);
 
-			memcpy(&rx, &ix, 4);
+		return rx;
+	}
 
-			return rx;
-		}
+	float y() const noexcept 
+	{ 
+		return m_y; 
+	}
 
-		float y() const noexcept { return m_y; }
+	bool is_on_line() const noexcept 
+	{ 
+		return m_x < 0.0F; 
+	}
+};
 
-		bool is_on_line() const noexcept { return m_x < 0.0F; }
-	};
+struct glyph_contour
+{
+private:
 
-	struct contour
+	const glyph_point* m_points;
+	const uint32_t m_point_cnt;
+
+public:
+
+	glyph_contour(const glyph_point* points, uint32_t point_cnt) : m_points{ points }, m_point_cnt{ point_cnt } {}
+
+	glyph_point operator[](uint32_t point_idx) const noexcept { return m_points[point_idx]; }
+
+	uint32_t point_cnt() const noexcept { return m_point_cnt; };
+};
+
+struct glyph_metrics
+{
+	float m_x_min;
+
+	float m_x_max;
+
+	float m_y_min;
+
+	float m_y_max;
+
+	float m_advance_width;
+
+	float m_left_side_bearing;
+
+	glyph_metrics(float x_min, float x_max, float y_min, float y_max, float advance_width, float left_side_bearing) :
+		m_x_min{ x_min }, m_x_max{ x_max }, m_y_min{ y_min }, m_y_max{ y_max }, m_advance_width{ advance_width }, m_left_side_bearing{ left_side_bearing } {}
+
+	float x_min() const noexcept { return m_x_min; }
+
+	float x_max() const noexcept { return m_x_max; }
+
+	float y_min() const noexcept { return m_y_min; }
+
+	float y_max() const noexcept { return m_y_max; }
+
+	float x_size() const noexcept { return x_max() - x_min(); }
+
+	float y_size() const noexcept { return y_max() - y_min(); }
+
+	float advance_width() const noexcept { return m_advance_width; }
+
+	float left_bearing() const noexcept { return m_left_side_bearing; }
+
+	float right_bearing() const noexcept { return advance_width() - left_bearing() - x_size(); }
+};
+
+struct glyph_data
+{
+private:
+
+	glyph_metrics m_metrics;
+
+	uint32_t m_point_cnt;
+
+	uint32_t m_contour_cnt;
+
+	glyph_point* m_points;
+
+public:
+
+	glyph_data() noexcept :
+		m_point_cnt{ 0 },
+		m_contour_cnt{ 0 },
+		m_points{ nullptr },
+		m_metrics{ 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F }
+	{}
+
+	glyph_data(uint32_t contour_cnt, uint32_t point_cnt, glyph_metrics metrics, glyph_point* raw_data_ownership_transferred) noexcept :
+		m_point_cnt{ point_cnt },
+		m_contour_cnt{ contour_cnt },
+		m_points{ raw_data_ownership_transferred },
+		m_metrics{ metrics }
+	{}
+
+	~glyph_data() noexcept { free(m_points); }
+
+	glyph_contour get_contour(uint32_t contour_idx) const noexcept
 	{
-		const uint16_t m_point_cnt;
-		const point* m_points;
-		const uint8_t* m_is_on_line;
+		uint32_t beg_point = contour_idx ? reinterpret_cast<const uint32_t*>(m_points + m_point_cnt)[contour_idx - 1] + 1 : 0;
 
-		point operator[](uint16_t point_idx) const noexcept { return m_points[point_idx]; }
-	};
+		return glyph_contour(m_points + beg_point, static_cast<uint32_t>(reinterpret_cast<const uint32_t*>(m_points + m_point_cnt)[contour_idx] - beg_point + 1));
+	}
 
-	struct glyph_data
-	{
-		float m_x_min;
+	glyph_point get_point(uint32_t point_idx) const noexcept { return m_points[point_idx]; }
 
-		float m_x_max;
+	float x_min() const noexcept { return m_metrics.x_min(); }
 
-		float m_y_min;
+	float x_max() const noexcept { return m_metrics.x_max(); }
 
-		float m_y_max;
+	float y_min() const noexcept { return m_metrics.y_min(); }
 
-		float m_advance_width;
+	float y_max() const noexcept { return m_metrics.y_max(); }
 
-		float m_left_side_bearing;
+	float advance_width() const noexcept { return m_metrics.advance_width(); }
 
-		uint16_t m_point_cnt;
+	float left_side_bearing() const noexcept { return m_metrics.left_bearing(); }
 
-		uint16_t m_contour_cnt;
+	uint32_t contour_cnt() const noexcept { return m_contour_cnt; }
 
-		point* m_points;
+	uint32_t point_cnt() const noexcept { return m_point_cnt; }
+};
 
-		uint16_t* m_contour_end_indices;
-
-		glyph_data(uint16_t contour_cnt, uint16_t point_cnt, float x_min, float x_max, float y_min, float y_max, float advance_width, float left_side_bearing) noexcept : 
-			m_point_cnt{ point_cnt }, 
-			m_contour_cnt{ contour_cnt }, 
-			m_points{ point_cnt || contour_cnt ? static_cast<point*>(malloc(point_cnt * sizeof(point) + contour_cnt * sizeof(uint16_t))) : nullptr }, 
-			m_contour_end_indices{ reinterpret_cast<uint16_t*>(m_points + point_cnt) },
-			m_x_min{ x_min },
-			m_x_max{ x_max },
-			m_y_min{ y_min },
-			m_y_max{ y_max },
-			m_advance_width{advance_width},
-			m_left_side_bearing{left_side_bearing}
-		{}
-
-		glyph_data() noexcept :
-			m_point_cnt{ 0 },
-			m_contour_cnt{ 0 },
-			m_points{ nullptr },
-			m_contour_end_indices{ nullptr },
-			m_x_min{ 0 },
-			m_x_max{ 0 },
-			m_y_min{ 0 },
-			m_y_max{ 0 },
-			m_advance_width{0},
-			m_left_side_bearing{0}
-		{}
-
-		glyph_data(glyph_data&& rvalue) noexcept :
-			m_point_cnt{ rvalue.m_point_cnt },
-			m_contour_cnt{ rvalue.m_contour_cnt },
-			m_points{ rvalue.m_points },
-			m_contour_end_indices{ rvalue.m_contour_end_indices },
-			m_x_min{ rvalue.m_x_min },
-			m_x_max{ rvalue.m_x_max },
-			m_y_min{ rvalue.m_y_min },
-			m_y_max{ rvalue.m_y_max },
-			m_advance_width{ rvalue.m_advance_width },
-			m_left_side_bearing{ rvalue.m_left_side_bearing }
-		{ rvalue.m_points = nullptr; }
-
-		~glyph_data() noexcept { if(m_points) free(m_points); }
-
-		contour get_contour(uint16_t contour_idx) const noexcept
-		{
-			uint16_t beg_point = contour_idx ? m_contour_end_indices[contour_idx - 1] : 0;
-
-			return { static_cast<uint16_t>(m_contour_end_indices[contour_idx] - beg_point), m_points + beg_point };
-		}
-
-		point get_point(uint16_t point_idx) const noexcept { return m_points[point_idx]; }
-
-		float x_min() const noexcept { return m_x_min; }
-
-		float x_max() const noexcept { return m_x_max; }
-		
-		float y_min() const noexcept { return m_y_min; }
-		
-		float y_max() const noexcept { return m_y_max; }
-
-		float advance_width() const noexcept { return m_advance_width; }
-
-		float left_side_bearing() const noexcept { return m_left_side_bearing; }
-
-		uint16_t contour_cnt() const noexcept { return m_contour_cnt; }
-
-		uint16_t point_cnt() const noexcept { return m_point_cnt; }
-	};
-}
 
 struct file_header
 {
@@ -189,12 +203,12 @@ struct table_tag
 	}
 };
 
-enum class file_type
-{
-	invalid,
-	opentype,
-	truetype
-};
+	enum class file_type
+	{
+		invalid,
+		opentype,
+		truetype
+	};
 
 
 
@@ -280,14 +294,126 @@ private:
 		const uint32_t* full_offsets;
 	};
 
-	using glyf_fn = fnt::glyph_data(*) (const void*, uint32_t) noexcept;
+	struct glyph_header
+	{
+		int16_t num_contours;
+		int16_t x_min;
+		int16_t y_min;
+		int16_t x_max;
+		int16_t y_max;
+	};
+
+	struct internal_glyph_data
+	{
+		uint32_t point_cnt;
+		uint32_t contour_cnt;
+
+	private:
+
+		glyph_point* m_points;
+
+	public:
+
+		glyph_point* points() noexcept { return m_points; }
+
+		uint32_t* contour_end_indices() noexcept { return reinterpret_cast<uint32_t*>(m_points + point_cnt); }
+
+		void create(uint32_t point_cnt_, uint32_t contour_cnt_)
+		{
+			point_cnt = point_cnt_;
+
+			contour_cnt = contour_cnt_;
+
+			m_points = static_cast<glyph_point*>(malloc(point_cnt_ * sizeof(glyph_point) + contour_cnt_ * sizeof(uint32_t)));
+		}
+
+		void destroy() noexcept
+		{
+			free(m_points);
+		}
+
+		glyph_data to_glyph_data(glyph_metrics metrics) const noexcept
+		{
+			return glyph_data(contour_cnt, point_cnt, metrics, m_points);
+		}
+
+		// Only for use with unflagged points for rhs!
+		static void translate_glyph_point(glyph_point& lhs, float dx, float dy)
+		{
+			if (lhs.is_on_line())
+				lhs.m_x = -(lhs.x() + dx);
+			else
+				lhs.m_x += dx;
+
+			lhs.m_y += dy;
+		}
+
+		void translate(float dx, float dy) noexcept
+		{
+			for (uint32_t i = 0; i != point_cnt; ++i)
+			{
+				glyph_point& p = m_points[i];
+
+				if (p.is_on_line())
+					p.m_x -= dx;
+				else
+					p.m_x += dx;
+
+				p.m_y += dy;
+			}
+		}
+
+		void scale(float sx, float sy) noexcept
+		{
+			for (uint32_t i = 0; i != point_cnt; ++i)
+			{
+				glyph_point& p = m_points[i];
+
+				p.m_x *= sx;
+				p.m_y *= sy;
+			}
+		}
+
+		void transform(float xx, float xy, float yx, float yy)
+		{
+			for (uint32_t i = 0; i != point_cnt; ++i)
+			{
+				glyph_point& p = m_points[i];
+
+				float ax = p.x();
+
+				float rx = ax * xx + p.m_y * xy;
+
+				float ry = ax * yx + p.m_y * yy;
+
+				if (p.is_on_line())
+					p.m_x = -rx;
+				else
+					p.m_x = rx;
+
+				p.m_y = ry;
+			}
+		}
+
+		// internal_glyph_data merge(internal_glyph_data& a, internal_glyph_data& b)
+	};
+
+
+
+	using glyf_fn = glyph_data(*) (const void*, uint32_t) noexcept;
 
 	struct codepoint_mapper_data
 	{
 		using cmap_fn = uint32_t(*) (const void*, uint32_t) noexcept;
 
 		cmap_fn mapper;
+
 		const void* data;
+
+		uint32_t get_glyph_id(char32_t cpt) const noexcept
+		{
+			return mapper(data, static_cast<uint32_t>(cpt));
+		}
 
 		static uint32_t cmap_f4(const void* raw_tbl, uint32_t cpt) noexcept
 		{
@@ -422,9 +548,11 @@ private:
 
 	uint32_t m_full_horizontal_layout_cnt;
 
+	uint32_t m_max_composite_glyph_cnt;
+
 	codepoint_mapper_data m_codepoint_mapper;
 
-	loca_table_data m_glyph_offsets;
+	const void* m_glyph_offsets;
 
 	const void* m_glyph_data;
 
@@ -448,7 +576,7 @@ public:
 
 		// Load tables
 
-		m_glyph_offsets.short_offsets = get_table<uint16_t>("loca");
+		m_glyph_offsets = get_table("loca");
 
 		m_glyph_data = get_table("glyf");
 
@@ -462,7 +590,7 @@ public:
 
 		const cmap_table_data* cmap_tbl = get_table<cmap_table_data>("cmap");
 
-		if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_glyph_offsets.short_offsets || !m_glyph_data || !m_horizontal_layout_data)
+		if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_glyph_offsets || !m_glyph_data || !m_horizontal_layout_data)
 			return;
 
 		if(!(m_codepoint_mapper = query_codepoint_mapping(cmap_tbl)).data)
@@ -484,14 +612,20 @@ public:
 
 		m_glyph_cnt = be_to_le(maxp_tbl->num_glyphs);
 
+		m_max_composite_glyph_cnt = be_to_le(maxp_tbl->max_component_elemenents);
+
 		m_file_type = tentative_file_type;
 	}
 
-	fnt::glyph_data operator[](char32_t codepoint) const noexcept
+	glyph_data get_glyph(char32_t codepoint) const noexcept
 	{
-		const uint32_t glyph_id = m_codepoint_mapper.mapper(m_codepoint_mapper.data, static_cast<uint32_t>(codepoint));
+		const uint32_t glyph_id = m_codepoint_mapper.get_glyph_id(codepoint);
 
-		return interpret_glyph_data(glyph_id);
+		uint32_t metrics_glyph_id = glyph_id; // Only overwritten if there is a USE_MY_METRICS flag in a composite glyph component
+
+		internal_glyph_data glf = get_glyph_data_recursive(glyph_id, metrics_glyph_id);
+
+		return glf.to_glyph_data(get_glyph_metrics(metrics_glyph_id));
 	}
 
 	operator bool() const noexcept
@@ -531,55 +665,12 @@ private:
 		return nullptr;
 	}
 
-	fnt::glyph_data interpret_glyph_data(uint32_t glyph_id) const noexcept
+	internal_glyph_data get_glyph_data_recursive(uint32_t glyph_id, uint32_t& out_glyph_id_for_metrics_to_use) const noexcept
 	{
-		struct glyph_header
-		{
-			int16_t num_contours;
-			int16_t x_min;
-			int16_t y_min;
-			int16_t x_max;
-			int16_t y_max;
-		};
-
 		// If this is violated, something went wrong in the character mapper. Uh-Oh.
 		assert(glyph_id < m_glyph_cnt);
 
-		uint32_t glyph_offset;
-
-		if (m_flags.full_glyph_offsets)
-			glyph_offset = be_to_le(m_glyph_offsets.full_offsets[glyph_id]);
-		else
-			glyph_offset = be_to_le(m_glyph_offsets.short_offsets[glyph_id]) * 2;
-
-		float advance_width;
-
-		float left_side_bearing;
-
-		struct horizontal_metrics
-		{
-			uint16_t advance_width;
-			int16_t left_side_bearing;
-		};
-
-		if (glyph_id >= m_full_horizontal_layout_cnt)
-		{
-			advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[m_full_horizontal_layout_cnt - 1].advance_width));
-
-			left_side_bearing = static_cast<float>(be_to_le(reinterpret_cast<const int16_t*>(static_cast<const horizontal_metrics*>(m_horizontal_layout_data) + m_full_horizontal_layout_cnt)[glyph_id - m_full_horizontal_layout_cnt]));
-		}
-		else
-		{
-			advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].advance_width));
-
-			left_side_bearing = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].left_side_bearing));
-		}
-
-		advance_width *= m_normalization_factor;
-
-		left_side_bearing *= m_normalization_factor;
-
-		const glyph_header* header = reinterpret_cast<const glyph_header*>(static_cast<const uint8_t*>(m_glyph_data) + glyph_offset);
+		const glyph_header* header = find_glyph(glyph_id);
 
 		int16_t contour_cnt = be_to_le(header->num_contours);
 
@@ -596,29 +687,26 @@ private:
 
 			const uint16_t* endpt_inds = reinterpret_cast<const uint16_t*>(header + 1);
 
+			const uint16_t point_cnt = be_to_le(endpt_inds[contour_cnt - 1]) + 1;
+
 			const uint16_t instruction_bytes = be_to_le(endpt_inds[contour_cnt]);
 
 			const uint8_t* instructions = reinterpret_cast<const uint8_t*>(endpt_inds + contour_cnt + 1);
 
 			const uint8_t* raw_data = instructions + instruction_bytes; // Flags, X-Coords, Y-Coords
 
-			const uint16_t point_cnt = be_to_le(endpt_inds[contour_cnt - 1]) + 1;
-
-			const int16_t x_min = be_to_le(header->x_min);
-			const int16_t x_max = be_to_le(header->x_max);
-			const int16_t y_min = be_to_le(header->y_min);
-			const int16_t y_max = be_to_le(header->y_max);
-
-			fnt::glyph_data ret(contour_cnt, point_cnt, x_min * m_normalization_factor - m_x_min_global, x_max * m_normalization_factor - m_x_min_global, y_min * m_normalization_factor - m_y_min_global, y_max * m_normalization_factor - m_y_min_global, advance_width, left_side_bearing);
+			internal_glyph_data ret;
+			
+			ret.create(point_cnt, contour_cnt);
 
 			for (uint16_t i = 0; i != contour_cnt; ++i)
-				ret.m_contour_end_indices[i] = endpt_inds[i];
+				ret.contour_end_indices()[i] = be_to_le(endpt_inds[i]);
 
 			uint8_t* decoded_flags = static_cast<uint8_t*>(malloc(point_cnt));
 
 			uint32_t byte_idx = 0, write_idx = 0;
 
-			for (; write_idx < point_cnt;)
+			while(write_idx < point_cnt)
 			{
 				uint8_t f = raw_data[byte_idx++];
 
@@ -635,7 +723,7 @@ private:
 
 			// If this is not true, there was an error while expanding the raw flags array
 			assert(write_idx == point_cnt);
-			
+
 			int16_t prev_x = 0;
 
 			for (uint32_t i = 0; i != point_cnt; ++i)
@@ -649,7 +737,7 @@ private:
 					if (!(decoded_flags[i] & X_IS_SAME_OR_POSITIVE_X_SHORT_VEC))
 						delta_x = -delta_x;
 				}
-				else if(!(decoded_flags[i] & X_IS_SAME_OR_POSITIVE_X_SHORT_VEC))
+				else if (!(decoded_flags[i] & X_IS_SAME_OR_POSITIVE_X_SHORT_VEC))
 				{
 					delta_x = static_cast<int16_t>(raw_data[byte_idx++]) << 8;
 					delta_x |= raw_data[byte_idx++];
@@ -657,10 +745,10 @@ private:
 
 				const int16_t new_x = prev_x + delta_x;
 
-				ret.m_points[i].m_x = new_x * m_normalization_factor - m_x_min_global;
+				ret.points()[i].m_x = new_x * m_normalization_factor;
 
 				if (decoded_flags[i] & ON_CURVE_POINT)
-					ret.m_points[i].m_x = -ret.m_points[i].m_x;
+					ret.points()[i].m_x = -ret.points()[i].m_x;
 
 				prev_x = new_x;
 			}
@@ -686,12 +774,35 @@ private:
 
 				const int32_t new_y = prev_y + delta_y;
 
-				ret.m_points[i].m_y = new_y * m_normalization_factor - m_y_min_global;
+				ret.points()[i].m_y = new_y * m_normalization_factor;
 
 				prev_y = new_y;
 			}
 
 			free(decoded_flags);
+
+			och::print("\n----------------------------------\n"
+				"----------Glyph {:18~-}\n"
+				"----------------------------------\n\n", glyph_id);
+
+			och::print("Contour_cnt: {}\n", ret.contour_cnt);
+
+			for (uint32_t i = 0; i != ret.contour_cnt; ++i)
+				och::print("End index #{}: {}\n", i, ret.contour_end_indices()[i]);
+
+			uint32_t contour_beg = 0;
+
+			for (uint32_t j = 0; j != ret.contour_cnt; ++j)
+			{
+				for (uint32_t k = contour_beg; k != ret.contour_end_indices()[j] + 1; ++k)
+					och::print("   {:3>}:   ({},{})\n", k - contour_beg, ret.points()[k].x(), ret.points()[k].y());
+
+				och::print("\n");
+
+				contour_beg = ret.contour_end_indices()[j] + 1;
+			}
+
+			och::print("\n");
 
 			return ret;
 		}
@@ -712,24 +823,34 @@ private:
 
 			uint16_t flags;
 
-			uint16_t component_glyph_idx;
-
 			uint32_t word_idx = 0;
 
 			const uint16_t* raw_data = reinterpret_cast<const uint16_t*>(header + 1);
+
+			internal_glyph_data* components = static_cast<internal_glyph_data*>(malloc(m_max_composite_glyph_cnt * sizeof(internal_glyph_data)));
+
+			uint32_t component_cnt = 0;
+
+			uint16_t previous_total_point_cnt = 0;
+
+			uint16_t previous_total_contour_cnt = 0;
 
 			do
 			{
 				flags = be_to_le(raw_data[word_idx++]);
 
-				component_glyph_idx = be_to_le(raw_data[word_idx++]);
+				const uint16_t component_glyph_id = be_to_le(raw_data[word_idx++]);
+
+				components[component_cnt++] = get_glyph_data_recursive(component_glyph_id, out_glyph_id_for_metrics_to_use);
+
+				internal_glyph_data& curr_component = components[component_cnt - 1];
 
 				int16_t arg1;
 				int16_t arg2;
-				float scale_x = 1.0F;
-				float scale_y = 1.0F;
-				float scale_01 = 0.0F;
-				float scale_10 = 0.0F;
+				float scale_x;
+				float scale_y;
+				float scale_01;
+				float scale_10;
 
 				if (flags & ARG_1_AND_2_ARE_WORDS)
 				{
@@ -746,33 +867,175 @@ private:
 					arg2 = static_cast<int16_t>(static_cast<int8_t>(both_args)); // Sign extension shenanigans
 				}
 
+				if (flags & UNSCALED_COMPONENT_OFFSET) // Translate before scaling and rotation
+				{
+					if (flags & ARGS_ARE_XY_VALUES)
+					{
+						float dx = static_cast<float>(arg1) * m_normalization_factor;
+
+						float dy = static_cast<float>(arg2) * m_normalization_factor;
+
+						curr_component.translate(dx, dy);
+					}
+					else
+					{
+						const glyph_point& matched_old = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg1));
+
+						const glyph_point& matched_new = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg2));
+
+						float dx = matched_old.x() - matched_new.x();
+
+						float dy = matched_old.y() - matched_new.y();
+
+						curr_component.translate(dx, dy);
+					}
+				}
+
 				if (flags & WE_HAVE_A_SCALE)
 				{
-					scale_x = scale_y = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_x = scale_y = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
+
+					curr_component.scale(scale_x, scale_y);
 				}
 				else if (flags & WE_HAVE_A_X_AND_Y_SCALE)
 				{
-					scale_x = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_x = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
 
-					scale_y = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_y = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14))* m_normalization_factor;
+
+					curr_component.scale(scale_x, scale_y);
 				}
 				else if (flags & WE_HAVE_A_TWO_BY_TWO)
 				{
-					scale_x = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_x = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
 
-					scale_01 = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
-					
-					scale_10 = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_01 = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
 
-					scale_y = static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14);
+					scale_10 = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
+
+					scale_y = (static_cast<float>(be_to_le(raw_data[word_idx++])) / (1 << 14)) * m_normalization_factor;
+
+					curr_component.transform(scale_x, scale_01, scale_10, scale_y);
 				}
-			} 
+
+				if (!(flags & UNSCALED_COMPONENT_OFFSET)) // Translate after scaling and rotation
+				{
+					if (flags & ARGS_ARE_XY_VALUES)
+					{
+						float dx = static_cast<float>(arg1) * m_normalization_factor;
+
+						float dy = static_cast<float>(arg2) * m_normalization_factor;
+
+						curr_component.translate(dx, dy);
+					}
+					else
+					{
+						const glyph_point& matched_old = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg1));
+
+						const glyph_point& matched_new = find_glyph_point_in_internal_composite(components, static_cast<uint16_t>(arg2));
+
+						float dx = matched_old.x() - matched_new.x();
+
+						float dy = matched_old.y() - matched_new.y();
+
+						curr_component.translate(dx, dy);
+					}
+				}
+
+				previous_total_point_cnt += static_cast<uint16_t>(curr_component.point_cnt);
+
+				previous_total_contour_cnt += static_cast<uint16_t>(curr_component.contour_cnt);
+			}
 			while (flags & MORE_COMPONENTS);
+			
+			internal_glyph_data ret;
 
-			och::print("Composite Glyphs are not yet implemented!\n");
+			ret.create(previous_total_point_cnt, previous_total_contour_cnt);
 
-			return {};
+			uint16_t point_idx = 0;
+
+			uint16_t contour_idx = 0;
+
+			for (uint32_t i = 0; i != component_cnt; ++i)
+			{
+				for (uint16_t j = 0; j != components[i].point_cnt; ++j)
+					ret.points()[point_idx + j] = components[i].points()[j];
+
+				for (uint16_t j = 0; j != components[i].contour_cnt; ++j)
+					ret.contour_end_indices()[contour_idx + j] = components[i].contour_end_indices()[j] + point_idx;
+
+				contour_idx += static_cast<uint16_t>(components[i].contour_cnt);
+
+				point_idx += static_cast<uint16_t>(components[i].point_cnt);
+			}
+
+			for (uint32_t i = 0; i != component_cnt; ++i)
+				components[i].destroy();
+
+			free(components);
+
+			return ret;
 		}
+	}
+
+	const glyph_point& find_glyph_point_in_internal_composite(internal_glyph_data* components, uint16_t point_idx) const noexcept
+	{
+		uint16_t component_idx = 0;
+
+		uint32_t running_point_cnt = components[0].point_cnt;
+
+		while (running_point_cnt < point_idx)
+			running_point_cnt += components[++component_idx].point_cnt;
+
+		return components[component_idx].points()[point_idx - running_point_cnt];
+	}
+
+	const glyph_header* find_glyph(uint32_t glyph_id) const noexcept
+	{
+		uint32_t glyph_offset;
+
+		if (m_flags.full_glyph_offsets)
+			glyph_offset = be_to_le(static_cast<const uint32_t*>(m_glyph_offsets)[glyph_id]);
+		else
+			glyph_offset = be_to_le(static_cast<const uint16_t*>(m_glyph_offsets)[glyph_id]) * 2;
+
+		return reinterpret_cast<const glyph_header*>(static_cast<const uint8_t*>(m_glyph_data) + glyph_offset);
+	}
+
+	glyph_metrics get_glyph_metrics(uint32_t glyph_id) const noexcept
+	{
+		float advance_width;
+
+		float left_side_bearing;
+
+		struct horizontal_metrics
+		{
+			uint16_t advance_width;
+			int16_t left_side_bearing;
+		};
+
+		if (glyph_id >= m_full_horizontal_layout_cnt)
+		{
+			advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[m_full_horizontal_layout_cnt - 1].advance_width));
+			left_side_bearing = static_cast<float>(be_to_le(reinterpret_cast<const int16_t*>(static_cast<const horizontal_metrics*>(m_horizontal_layout_data) + m_full_horizontal_layout_cnt)[glyph_id - m_full_horizontal_layout_cnt]));
+		}
+		else
+		{
+			advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].advance_width));
+			left_side_bearing = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].left_side_bearing));
+		}
+
+		advance_width *= m_normalization_factor;
+		left_side_bearing *= m_normalization_factor;
+
+		const glyph_header* header = find_glyph(glyph_id);
+
+		const float x_min = be_to_le(header->x_min) * m_normalization_factor;
+		const float x_max = be_to_le(header->x_max) * m_normalization_factor;
+		const float y_min = be_to_le(header->y_min) * m_normalization_factor;
+		const float y_max = be_to_le(header->y_max) * m_normalization_factor;
+
+		return glyph_metrics(x_min, x_max, y_min, y_max, advance_width, left_side_bearing);
 	}
 
 	static file_type query_file_type(const och::mapped_file<file_header>& file) noexcept
@@ -832,6 +1095,4 @@ private:
 		else
 			return {};
 	}
-
-	
 };
