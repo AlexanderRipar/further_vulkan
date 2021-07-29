@@ -31,6 +31,9 @@
     <Filter Include="samples\font">
       <UniqueIdentifier>{d4937fdd-d47d-440f-8e39-a753616f75d2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="extend_io">
+      <UniqueIdentifier>{aabdcde1-39a4-4fbb-a1e1-6675404b5b86}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -65,6 +68,9 @@
     </ClCompile>
     <ClCompile Include="sdf_font.cpp">
       <Filter>samples\font</Filter>
+    </ClCompile>
+    <ClCompile Include="truetype.cpp">
+      <Filter>extend_io</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -125,22 +131,25 @@
     <ClInclude Include="sdf_font.h">
       <Filter>samples\font</Filter>
     </ClInclude>
-    <ClInclude Include="sdf_image.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="binary_image.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="texels.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="bitmap.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="tiny_obj_loader.h">
       <Filter>samples\vulkan_tutorial</Filter>
     </ClInclude>
-    <ClInclude Include="opentype_file.h">
+    <ClInclude Include="texels.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="sdf_image.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="truetype.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="bitmap.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="binary_image.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="simple_vec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

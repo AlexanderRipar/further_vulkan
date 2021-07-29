@@ -227,6 +227,7 @@
     <ClCompile Include="och_error_handling.cpp" />
     <ClCompile Include="compute_buffer_copy.cpp" />
     <ClCompile Include="och_vulkan_base.cpp" />
+    <ClCompile Include="truetype.cpp" />
     <ClCompile Include="vulkan_tutorial.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -243,7 +244,8 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h" />
     <ClInclude Include="binary_image.h" />
     <ClInclude Include="bitmap.h" />
-    <ClInclude Include="opentype_file.h" />
+    <ClInclude Include="simple_vec.h" />
+    <ClInclude Include="truetype.h" />
     <ClInclude Include="texels.h" />
     <ClInclude Include="sdf_font.h" />
     <ClInclude Include="och_heap_buffer.h" />
