@@ -86,6 +86,16 @@ public:
 		m_size = 0;
 	}
 
+	T* data() noexcept
+	{
+		return m_data;
+	}
+
+	const T* data() const noexcept
+	{
+		return m_data;
+	}
+
 private:
 
 	void assert_capacity(uint32_t requested) noexcept
