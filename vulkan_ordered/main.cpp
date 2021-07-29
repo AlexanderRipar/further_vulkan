@@ -70,36 +70,44 @@ void write_glyph_info(const truetype_file& file, uint32_t codept, och::stringvie
 
 och::err_info font_testing() noexcept
 {
-	och::file_search folder("C:/Windows/Fonts", och::fio::search_for_files, "?ttf");
+	truetype_file ttf("C:/Windows/Fonts/consola.ttf");
 
-	och::print("Starting search...\n\n");
+	if (!ttf)
+		return MSG_ERROR("Could not open ttf file");
 
-	uint32_t file_cnt = 0;
+	glyph_data glyph = ttf.get_glyph(0x01DF);
 
-	for (auto file_info : folder)
+	constexpr uint32_t bmp_size = 256;
+
+	bitmap_file bmp("textures\\glyph_points.bmp", och::fio::open_truncate, bmp_size, bmp_size);
+
+	if (!bmp)
+		return MSG_ERROR("Could not open bmp file");
+
+	constexpr texel_b8g8r8 contour_colours[4][2]
 	{
-		och::stringview ending = file_info.ending();
+		{{0x00, 0x00, 0xFF}, {0x00, 0x00, 0x5F}},
+		{{0x00, 0xFF, 0x00}, {0x00, 0x5F, 0x00}},
+		{{0xFF, 0x00, 0x00}, {0x5F, 0x00, 0x00}},
+		{{0x00, 0xFF, 0xFF}, {0x00, 0x5F, 0x6F}},
+	};
 
-		++file_cnt;
+	for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+	{
+		const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
 
-		truetype_file file(file_info.absolute_name().raw_cbegin());
+		och::print("\n       Contour {}:\n", i);
 
-		if (!file)
+		for (uint32_t j = beg; j != end; ++j)
 		{
-			och::print("\nError with file {}\n", file_info.absolute_name());
+			const och::vec2 p = glyph.get_point(j);
 
-			continue;
+			och::print("{:3>} ({:3>}):   ({}, {})\n", j - beg, j, p.x, p.y);
+
+			bmp(static_cast<uint32_t>(p.x * bmp_size), static_cast<uint32_t>(p.y * bmp_size)) = contour_colours[i & 3][((j - beg) & 1)];
 		}
 
-		och::print("{}\n", file_info.name());
-
-		//bool has_erred_before = false;
-		//
-		//for (uint32_t i = 0; i != 0x10000; ++i)
-		//	write_glyph_info(file, i, file_info.name(), has_erred_before);
 	}
-
-	och::print("\n{} Files found\n", file_cnt);
 
 	return {};
 }

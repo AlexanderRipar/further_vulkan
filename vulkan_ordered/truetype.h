@@ -306,8 +306,6 @@ private:
 		void scale(float sx, float sy) noexcept;
 
 		void transform(float xx, float xy, float yx, float yy) noexcept;
-
-		static och::vec2 interpolate(const och::vec2& a, const och::vec2& b) noexcept;
 	};
 
 

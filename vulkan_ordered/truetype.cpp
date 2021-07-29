@@ -917,11 +917,11 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 		{
 			const uint32_t end = contour_end_indices()[i] + 1;
 
-			bool prev_on_line = is_on_line(end - 1);
+			bool prev_on_line = !is_on_line(begin);
 
 			if (end - begin > 2)		// Don't count degenerate contours
 			{
-				final_point_cnt += (!is_on_line(begin)) + (!is_on_line(end - 1));
+				final_point_cnt += 1 + (is_on_line(begin) && is_on_line(end - 1));
 
 				for (uint32_t j = begin; j != end; ++j)
 				{
@@ -950,6 +950,8 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 	// Write out decompressed points
 
 	{
+		const och::vec2 offset(-metrics.x_min(), -metrics.y_min());
+
 		uint32_t curr_idx = 0;
 
 		uint32_t begin = 0;
@@ -963,9 +965,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 				if (!is_on_line(begin))
 				{
 					if (!is_on_line(end - 1))
-						final_points[curr_idx++] = interpolate(points()[end - 1], points()[begin]);
+						final_points[curr_idx++] = (points()[end - 1] + points()[begin]) * 0.5F + offset;
 					else
-						final_points[curr_idx++] = points()[end - 1];
+						final_points[curr_idx++] = points()[end - 1] + offset;
 				}
 
 				bool prev_on_line = !is_on_line(begin);
@@ -975,9 +977,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 					bool curr_on_line = is_on_line(j);
 
 					if (prev_on_line == curr_on_line)
-						final_points[curr_idx++] = interpolate(points()[j - 1], points()[j]);
+						final_points[curr_idx++] = (points()[j - 1] + points()[j]) * 0.5F + offset;
 
-					final_points[curr_idx++] = points()[j];
+					final_points[curr_idx++] = points()[j] + offset;
 
 					prev_on_line = curr_on_line;
 				}
@@ -985,9 +987,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 				if (is_on_line(begin))
 				{
 					if (is_on_line(end - 1))
-						final_points[curr_idx++] = interpolate(points()[end - 1], points()[begin]);
+						final_points[curr_idx++] = (points()[end - 1] + points()[begin]) * 0.5F + offset;
 
-					final_points[curr_idx++] = points()[begin];
+					final_points[curr_idx++] = points()[begin] + offset;
 				}
 
 				final_contour_ends[i] = curr_idx;
@@ -999,7 +1001,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 
 	// return decompressed data
 
-	return glyph_data(final_contour_cnt, final_point_cnt, metrics, final_points);
+	return glyph_data(final_contour_cnt, final_point_cnt, glyph_metrics(0.0F, metrics.x_size(), 0.0F, metrics.y_size(), metrics.advance_width(), metrics.left_side_bearing() - metrics.x_min()), final_points);
 }
 
 void truetype_file::internal_glyph_data::translate(float dx, float dy) noexcept
@@ -1027,10 +1029,6 @@ void truetype_file::internal_glyph_data::transform(float xx, float xy, float yx,
 		m_points[i] = t * m_points[i];
 }
 
-och::vec2 truetype_file::internal_glyph_data::interpolate(const och::vec2& a, const och::vec2& b) noexcept
-{
-	return { (a.x + b.x) * 0.5F, (a.y + b.y) * 0.5F };
-}
 
 
 
