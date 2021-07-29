@@ -104,7 +104,7 @@ private:
 		{
 			m_capacity = och::next_pow2(requested);
 
-			m_data = realloc(m_data, m_capacity);
+			m_data = static_cast<T*>(realloc(m_data, m_capacity));
 		}
 	}
 };
