@@ -12,6 +12,10 @@
 
 #include "binary_image.h"
 
+#include "truetype.h"
+
+#include "simple_vec.h"
+
 struct sdf_image
 {
 private:
@@ -22,8 +26,6 @@ private:
 
 		int32_t d_sq() const noexcept { return dx * dx + dy * dy; }
 	};
-
-	static constexpr point INSIDE = { 0, 0 }, OUTSIDE = { 0x3FFF, 0x3FFF };
 
 	float* m_data = nullptr;
 
@@ -37,6 +39,8 @@ public:
 
 	och::err_info from_bim(const binary_image& img)
 	{
+		constexpr point INSIDE = { 0, 0 }, OUTSIDE = { 0x3FFF, 0x3FFF };
+
 		m_width = img.width();
 
 		m_height = img.height();
@@ -89,6 +93,58 @@ public:
 				m_data[x + y * m_width] *= normalization_fct;
 
 		return {};
+	}
+
+	och::err_info from_ttf(const glyph_data& glyph) noexcept
+	{
+		//constexpr float EDGE_THRESHOLD = 0.05233597865F; // sin(3°)
+		//
+		//// Find edges, i.e. Non-smooth transitions between the curves of a contour
+		//
+		//simple_vec<uint32_t> corners_inds(glyph.point_cnt());
+		//
+		//uint32_t beg = 0, end = glyph.contour_end_index(0);
+		//
+		//for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+		//{
+		//	glyph_bezier prev = glyph.get_bezier((end - beg) >> 1);
+		//
+		//	for (uint32_t j = beg; j != end; ++j)
+		//	{
+		//		glyph_bezier curr = glyph.get_bezier(j);
+		//
+		//		const och::vec2 a = och::normalize(prev.p2() - prev.p1());
+		//
+		//		const och::vec2 b = och::normalize(curr.p1() - curr.p0());
+		//
+		//		if (och::cross(a, b) > EDGE_THRESHOLD && och::dot(a, b) > 0.0F)
+		//			corners_inds.add(j);
+		//
+		//		prev = curr;
+		//	}
+		//}
+		//
+		//// If there actually are at least two segments separated by corners...
+		//if (corners_inds.size() > 1)
+		//{
+		//	uint32_t prev_corner = corners_inds[0];
+		//
+		//	for (uint32_t i = 1; i != corners_inds.size(); ++i)
+		//	{
+		//		uint32_t curr_corner = corners_inds[i];
+		//
+		//		for (uint32_t j = prev_corner; j != curr_corner; ++j)
+		//		{
+		//			const och::vec2 p = 
+		//		}
+		//
+		//		prev_corner = curr_corner;
+		//	}
+		//}
+		//else
+		//{
+		//	// TODO
+		//}
 	}
 
 	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = [](float dst) noexcept { uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); return dst < 0.0F ? texel_b8g8r8(c, c >> 1, 0) : texel_b8g8r8(c, c, c); })
