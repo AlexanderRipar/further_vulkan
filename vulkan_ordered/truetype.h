@@ -43,59 +43,6 @@ struct glyph_metrics
 	float right_side_bearing() const noexcept;
 };
 
-struct glyph_bezier
-{
-private:
-
-	const och::vec2* m_points;
-
-public:
-
-	glyph_bezier(const och::vec2* first_point) noexcept;
-
-	const och::vec2& p0() const noexcept;
-
-	const och::vec2& p1() const noexcept;
-
-	const och::vec2& p2() const noexcept;
-};
-
-struct glyph_contour
-{
-private:
-
-	const och::vec2* m_begin;
-
-	const och::vec2* m_end;
-
-public:
-
-	struct glyph_contour_iterator
-	{
-	private:
-
-		const och::vec2* m_point;
-
-	public:
-
-		glyph_contour_iterator(const och::vec2* point) noexcept;
-
-		void operator++() noexcept;
-
-		bool operator!=(const glyph_contour_iterator& rhs) const noexcept;
-
-		glyph_bezier operator*() const noexcept;
-	};
-
-	glyph_contour(const och::vec2* begin, const och::vec2* end) noexcept;
-
-	glyph_contour_iterator begin() const noexcept;
-
-	glyph_contour_iterator end() const noexcept;
-
-	const uint32_t point_cnt() const noexcept;
-};
-
 struct glyph_data
 {
 private:
@@ -117,10 +64,6 @@ public:
 	~glyph_data() noexcept;
 
 	och::vec2 get_point(uint32_t point_idx) const noexcept;
-
-	glyph_contour get_contour(uint32_t contour_idx) const noexcept;
-
-	glyph_bezier get_bezier(uint32_t bezier_idx) const noexcept;
 
 	const uint32_t* contour_end_indices() const noexcept;
 

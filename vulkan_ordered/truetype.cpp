@@ -55,115 +55,6 @@ float glyph_metrics::right_side_bearing() const noexcept { return advance_width(
 
 
 
-// Might be nice for dynamic decoding in the future...
-/*
-contour_bezier_iterator::contour_bezier_iterator(const glyph_data* data, const uint32_t first_point, const uint32_t last_point) : m_data{ data }
-{
-	// The contour is too short to actually construct a bezier from it; return early
-	if (last_point - first_point < 2)
-	{
-		m_curr_point = last_point + 1;
-
-		return;
-	}
-
-	m_beg_point = first_point;
-
-	m_end_point = last_point;
-
-	/*
-	The table below illustrates how points are read in:
-
-		 +-------------------------------------------------------------------------------------------------------------------------------
-		 |
-		 | prev       pt_0       pt_1       pt_2       ->        prev        pt_0        pt_1        pt_2       Advance      Case
-		 |
-		 | Off        Off        Off         On                        [X]    -    [X]                             1          A
-		 | Off        Off        Off        Off                        [X]    -    [X]                             1          A
-		 | Off        Off         On        Off                        [X]    -           X						   1          B
-		 | Off        Off         On         On                        [X]    -           X						   1          B
-		 | Off         On        Off        Off                               X           -    [X]                 2          C
-		 | Off         On        Off         On                 			  X           -           X            2          D
-		 | Off         On         On        Off                 			  X    [-]    X						   1          E
-		 | Off         On         On         On                 			  X    [-]    X						   1          E
-		 |  On        Off        Off        Off                   X           -    [X]		     				   1          F   +--------------------------------------------------------------
-		 |  On        Off        Off         On                   X			  -    [X]	     					   1          F   | From here down the table is irrelevant for operator++(), as
-		 |  On        Off         On        Off                   X			  -           X						   1          G   | prev will always be Off or pt_0 On and hence prev irrelevant.
-		 |  On        Off         On         On                   X			  -           X						   1          G   |
-		 |  On         On        Off        Off                               X           -    [X]                 2          C   |
-		 |  On         On        Off         On                 			  X           -           X            2          D   |
-		 |  On         On         On        Off                 			  X    [-]    X						   1          E   |
-		 |  On         On         On         On                 			  X    [-]    X						   1          E   |
-
-		prev ...... m_curr_point - 1 in operator++() and last_point in constructor
-		pt_0 ...... m_curr_point
-		pt_1 ...... Point after pt_0
-		pt_2 ...... Point after pt_1
-		Advance ... By how much m_curr_point is incremented
-		X ......... On-curve point in Bezier
-		- ......... Off-curve point in Bezier
-		[] ........ Bezier-point interpolated between previous and next data-points
-
-	*/
-
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-/*//////////////////////////////////////////////// glyph_bezier /////////////////////////////////////////////////*/
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-
-glyph_bezier::glyph_bezier(const och::vec2* first_point) noexcept : m_points{ first_point } {}
-
-const och::vec2& glyph_bezier::p0() const noexcept { return m_points[0]; }
-
-const och::vec2& glyph_bezier::p1() const noexcept { return m_points[1]; }
-
-const och::vec2& glyph_bezier::p2() const noexcept { return m_points[2]; }
-
-
-
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-/*//////////////////////////////////////////////// glyph_contour ////////////////////////////////////////////////*/
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-
-glyph_contour::glyph_contour(const och::vec2* begin, const och::vec2* end) noexcept : m_begin{ begin }, m_end{ end } {}
-
-glyph_contour::glyph_contour_iterator glyph_contour::begin() const noexcept
-{
-	return glyph_contour_iterator(m_begin);
-}
-
-glyph_contour::glyph_contour_iterator glyph_contour::end() const noexcept
-{
-	return glyph_contour_iterator(m_end);
-}
-
-const uint32_t glyph_contour::point_cnt() const noexcept
-{
-	return static_cast<uint32_t>(m_end - m_begin);
-}
-
-
-
-/*//////////////////////////////////// glyph_contour::glyph_contour_iterator ////////////////////////////////////*/
-
-glyph_contour::glyph_contour_iterator::glyph_contour_iterator(const och::vec2* point) noexcept : m_point{ point } {}
-
-void glyph_contour::glyph_contour_iterator::operator++() noexcept
-{
-	m_point += 2;
-}
-
-bool glyph_contour::glyph_contour_iterator::operator!=(const glyph_contour_iterator& rhs) const noexcept
-{
-	return m_point < rhs.m_point;
-}
-
-glyph_bezier glyph_contour::glyph_contour_iterator::operator*() const noexcept
-{
-	return glyph_bezier(m_point);
-}
-
-
-
 /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 /*///////////////////////////////////////////////// glyph_data ///////////////////////////////////////////////////*/
 /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
@@ -190,16 +81,6 @@ glyph_data::~glyph_data() noexcept
 och::vec2 glyph_data::get_point(uint32_t point_idx) const noexcept
 {
 	return m_points[point_idx];
-}
-
-glyph_contour glyph_data::get_contour(uint32_t contour_idx) const noexcept
-{
-	return glyph_contour(m_points + contour_beg_index(contour_idx), m_points + contour_end_index(contour_idx));
-}
-
-glyph_bezier glyph_data::get_bezier(uint32_t bezier_idx) const noexcept
-{
-	return m_points + bezier_idx * 2;
 }
 
 const uint32_t* glyph_data::contour_end_indices() const noexcept
