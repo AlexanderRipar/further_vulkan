@@ -244,7 +244,7 @@ private:
 
 		void destroy() noexcept;
 
-		glyph_data to_glyph_data(glyph_metrics metrics) noexcept;
+		glyph_data to_glyph_data(glyph_metrics metrics, float global_x_min, float global_y_min) noexcept;
 
 		void translate(float dx, float dy) noexcept;
 

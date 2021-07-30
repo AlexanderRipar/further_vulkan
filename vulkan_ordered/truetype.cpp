@@ -296,7 +296,7 @@ glyph_data truetype_file::get_glyph(char32_t codepoint) const noexcept
 
 	internal_glyph_data glf = get_glyph_data_recursive(glyph_id, metrics_glyph_id);
 
-	return glf.to_glyph_data(get_glyph_metrics(metrics_glyph_id));
+	return glf.to_glyph_data(get_glyph_metrics(metrics_glyph_id), m_x_min_global, m_y_min_global);
 }
 
 truetype_file::operator bool() const noexcept
@@ -788,7 +788,7 @@ void truetype_file::internal_glyph_data::destroy() noexcept
 	free(m_points);
 }
 
-glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metrics) noexcept
+glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metrics, float global_x_min, float global_y_min) noexcept
 {
 	// Count necessary points
 
@@ -834,7 +834,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 	// Write out decompressed points
 
 	{
-		const och::vec2 offset(-metrics.x_min(), -metrics.y_min());
+		const och::vec2 offset(-global_x_min, -global_y_min);
 
 		uint32_t curr_idx = 0;
 
@@ -873,7 +873,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 
 				if (!(!is_on_line(beg) && is_on_line(end - 1)))
 				{
-					final_points[curr_idx++] = points()[end - 1];
+					final_points[curr_idx++] = points()[end - 1] + offset;
 
 					if (is_on_line(end - 1))
 						final_points[curr_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
