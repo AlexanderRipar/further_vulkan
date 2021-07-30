@@ -72,6 +72,8 @@ public:
 
 		pass(neg);
 
+		const float normalization_fct = 1.0F / sqrtf(static_cast<float>(m_width * m_width + m_height * m_height));
+
 		for(int32_t y = 0; y != m_height; ++y)
 			for (int32_t x = 0; x != m_width; ++x)
 			{
@@ -79,109 +81,170 @@ public:
 				
 				float neg_dst = sqrtf(static_cast<float>(neg[x + y * m_width].d_sq()));
 
-				m_data[x + y * m_width] = pos_dst - neg_dst;
+				m_data[x + y * m_width] = (neg_dst - pos_dst) * normalization_fct;
 			}
 
 		free(pos);
 
 		free(neg);
 
-		const float normalization_fct = 1.0F / sqrtf(static_cast<float>(m_width * m_width + m_height * m_height));
-
-		for (int32_t y = 0; y != m_height; ++y)
-			for (int32_t x = 0; x != m_width; ++x)
-				m_data[x + y * m_width] *= normalization_fct;
-
 		return {};
 	}
 
-	och::err_info from_ttf(const glyph_data& glyph) noexcept
+	och::err_info from_glyph(const glyph_data& glyph, uint32_t width, uint32_t height) noexcept
 	{
-		constexpr float EDGE_THRESHOLD = 0.05233597865F; // sin(3°)
+		m_width = width;
 
-		simple_vec<uint32_t> corner_indices(16);
+		m_height = height;
 
-		for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+		m_data = static_cast<float*>(malloc(m_width * m_height * sizeof(float)));
+
+		if (glyph.point_cnt() < 6)
 		{
-			const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
+			for (int32_t y = 0; y != m_height; ++y)
+				for (int32_t x = 0; x != m_width; ++x)
+					m_data[x + y * m_width] = -1.0F;
 
-			{
-				const och::vec2 prev = glyph[end - 2];
-
-				const och::vec2 curr = glyph[beg];
-
-				const och::vec2 next = glyph[beg + 1];
-
-				const och::vec2 a = curr - prev;
-
-				const och::vec2 b = next - curr;
-
-				if (och::cross(a, b) > EDGE_THRESHOLD && och::dot(a, b) > 0.0F)
-					corner_indices.add(beg);
-			}
-
-			for (uint32_t j = beg + 1; j != end - 1; ++j)
-			{
-
-			}
+			return {};
 		}
 
+		const float inv_width = 1.0F / static_cast<float>(m_width);
 
+		const float inv_height = 1.0F / static_cast<float>(m_height);
 
+		for (int32_t y = 0; y != m_height; ++y)
+			for (int32_t x = 0; x != m_width; ++x)
+			{
+				float min_dst_sq = INFINITY;
 
+				float min_dst_sgn = -1.0F;
 
+				float min_dst_orthogonality = -INFINITY;
 
+				for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+				{
+					const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
 
-		//
-		//// Find edges, i.e. Non-smooth transitions between the curves of a contour
-		//
-		//simple_vec<uint32_t> corners_inds(glyph.point_cnt());
-		//
-		//uint32_t beg = 0, end = glyph.contour_end_index(0);
-		//
-		//for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
-		//{
-		//	glyph_bezier prev = glyph.get_bezier((end - beg) >> 1);
-		//
-		//	for (uint32_t j = beg; j != end; ++j)
-		//	{
-		//		glyph_bezier curr = glyph.get_bezier(j);
-		//
-		//		const och::vec2 a = och::normalize(prev.p2() - prev.p1());
-		//
-		//		const och::vec2 b = och::normalize(curr.p1() - curr.p0());
-		//
-		//		if (och::cross(a, b) > EDGE_THRESHOLD && och::dot(a, b) > 0.0F)
-		//			corners_inds.add(j);
-		//
-		//		prev = curr;
-		//	}
-		//}
-		//
-		//// If there actually are at least two segments separated by corners...
-		//if (corners_inds.size() > 1)
-		//{
-		//	uint32_t prev_corner = corners_inds[0];
-		//
-		//	for (uint32_t i = 1; i != corners_inds.size(); ++i)
-		//	{
-		//		uint32_t curr_corner = corners_inds[i];
-		//
-		//		for (uint32_t j = prev_corner; j != curr_corner; ++j)
-		//		{
-		//			const och::vec2 p = 
-		//		}
-		//
-		//		prev_corner = curr_corner;
-		//	}
-		//}
-		//else
-		//{
-		//	// TODO
-		//}
+					const och::vec2 curr_pt(static_cast<float>(x) * inv_width, static_cast<float>(y) * inv_height);
+
+					for (uint32_t j = beg; j < end; j += 2)
+					{
+						const och::vec2 p0 = glyph[j], p1 = glyph[j + 1], p2 = glyph[j + 2];
+
+						const och::vec2 dp = curr_pt - p0;
+
+						const och::vec2 d1 = p1 - p0;
+
+						const och::vec2 d2 = p2 - 2.0F * p1 + p0;
+
+						const float a3 = och::dot(d2, d2);
+
+						const float a2 = 3.0F * och::dot(d1, d2);
+
+						const float a1 = 2.0F * och::dot(d1, d1) - och::dot(d2, dp);
+
+						const float a0 = -och::dot(d1, dp);
+
+						float r0, r1, r2;
+
+						och::cubic_poly_roots(a3, a2, a1, a0, r0, r1, r2);
+
+						float dst_sq = och::squared_magnitude(curr_pt - p0); // dst_b;
+
+						float dst_t = 0.0F;
+
+						och::vec2 dst_p = p0;
+
+						const float dst_e = och::squared_magnitude(curr_pt - p2);
+
+						if (dst_e < dst_sq)
+						{
+							dst_sq = dst_e;
+
+							dst_t = 1.0F;
+
+							dst_p = p2;
+						}
+
+						if (och::abs(r0) < 1.0F)
+						{
+							const och::vec2 pb = bezier_interp(p0, p1, p2, r0);
+
+							const float dst_0 = och::squared_magnitude(curr_pt - pb);
+
+							if (dst_0 < dst_sq)
+							{
+								dst_sq = dst_0;
+
+								dst_t = r0;
+
+								dst_p = pb;
+							}
+						}
+
+						if (och::abs(r1) < 1.0F)
+						{
+							const och::vec2 pb = bezier_interp(p0, p1, p2, r1);
+
+							const float dst_1 = och::squared_magnitude(curr_pt - pb);
+
+							if (dst_1 < dst_sq)
+							{
+								dst_sq = dst_1;
+
+								dst_t = r1;
+
+								dst_p = pb;
+							}
+						}
+
+						if (och::abs(r2) < 1.0F)
+						{
+							const och::vec2 pb = bezier_interp(p0, p1, p2, r2);
+
+							const float dst_2 = och::squared_magnitude(curr_pt - pb);
+
+							if (dst_2 < dst_sq)
+							{
+								dst_sq = dst_2;
+
+								dst_t = r2;
+
+								dst_p = pb;
+							}
+						}
+
+						if (dst_sq + 1e-7F < min_dst_sq)
+						{
+							min_dst_sq = dst_sq;
+
+							const och::vec2 deriv = 2.0F * (dst_t * (p0 - 2.0F * p1 + p2) + p1 - p0);
+
+							min_dst_sgn = och::cross(deriv, dst_p - curr_pt) < 0.0F ? -1.0F : 1.0F;
+						}
+						else if (dst_sq <= min_dst_sq)
+						{
+							const och::vec2 deriv = 2.0F * (dst_t * (p0 - 2.0F * p1 + p2) + p1 - p0);
+
+							const float orthogonality = och::cross(och::normalize(deriv), och::normalize(curr_pt - dst_p));
+
+							if (och::abs(orthogonality) > min_dst_orthogonality)
+							{
+								min_dst_sq = dst_sq;
+
+								min_dst_sgn = och::cross(deriv, dst_p - curr_pt) < 0.0F ? -1.0F : 1.0F;
+							}
+						}
+					}
+				}
+
+				m_data[x + y * m_width] = sqrtf(min_dst_sq) * min_dst_sgn;
+			}
+
+			return {};
 	}
 
-	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = [](float dst) noexcept { uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); return dst < 0.0F ? texel_b8g8r8(c, c >> 1, 0) : texel_b8g8r8(c, c, c); })
+	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = [](float dst) noexcept { uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); return dst < 0.0F ? texel_b8g8r8(c, c, c) : texel_b8g8r8(c, c >> 1, 0); })
 	{
 		bitmap_file file(filename, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, m_width, m_height);
 
@@ -279,5 +342,10 @@ private:
 			for (int32_t x = m_width - 1; x >= 0; --x)
 				compare(ps, x, y, -1, 0);
 		}
+	}
+
+	static och::vec2 bezier_interp(och::vec2 p0, och::vec2 p1, och::vec2 p2, float t) noexcept
+	{
+		return (1.0F - t) * (1.0F - t) * p0 + 2.0F * (1.0F - t) * t * p1 + t * t * p2;
 	}
 };

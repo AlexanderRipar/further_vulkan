@@ -75,7 +75,7 @@ och::err_info font_testing() noexcept
 	if (!ttf)
 		return MSG_ERROR("Could not open ttf file");
 
-	glyph_data glyph = ttf.get_glyph(0x01DF);
+	glyph_data glyph = ttf.get_glyph('.'); // 0x01DF (ǟ)
 
 	constexpr uint32_t bmp_size = 256;
 
@@ -106,8 +106,13 @@ och::err_info font_testing() noexcept
 
 			bmp(static_cast<uint32_t>(p.x * bmp_size), static_cast<uint32_t>(p.y * bmp_size)) = contour_colours[i & 3][((j - beg) & 1)];
 		}
-
 	}
+
+	sdf_image sdf;
+
+	check(sdf.from_glyph(glyph, 512, 512));
+
+	sdf.save_bmp("textures/glyph_sdf.bmp", true);
 
 	return {};
 }
@@ -115,6 +120,14 @@ och::err_info font_testing() noexcept
 och::err_info testing() noexcept
 {
 	check(font_testing());
+
+	float a = 3.0F, b = -10.0F, c = 1.0F, d = 4.0F;
+
+	float r0, r1, r2;
+
+	och::cubic_poly_roots(a, b, c, d, r0, r1, r2);
+
+	och::print("{}x^3 + {}x^2 + {}x + {}\nr0: {}\nr1: {}\nr2: {}\n", a, b, c, d, r0, r1, r2);
 
 	return {};
 }

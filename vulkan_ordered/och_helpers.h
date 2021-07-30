@@ -28,6 +28,12 @@ namespace och
 		return v1 > v2 ? v1 : v2;
 	}
 
+	template<typename T>
+	T abs(const T& v) noexcept
+	{
+		return v < static_cast<T>(0) ? -v : v;
+	}
+
 	template<typename V, typename M>
 	bool contains_all(const V& v, const M& mask) noexcept
 	{
@@ -88,5 +94,59 @@ namespace och
 		n |= n >> 4;
 
 		return n + 1;
+	}
+
+	static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
+	{
+		const float a3_inv = 1.0F / a3;
+
+		a2 *= a3_inv;
+
+		a1 *= a3_inv;
+
+		a0 *= a3_inv;
+
+		const float p = a1 - (a2 * a2) * (1.0F / 3.0F);
+
+		const float q = a2 * a2 * a2 * (2.0F / 27.0F) - a2 * a1 * (1.0F / 3.0F) + a0;
+
+		const float d = q * q * (1.0F / 4.0F) + p * p * p * (1.0F / 27.0F);
+
+		r0 = r1 = r2 = INFINITY;
+
+		if (d < -1e-7F) // d < 0
+		{
+			constexpr float pi = 3.14159265359F;
+
+			const float r = sqrtf(-p * p * p * (1.0F / 27.0F));
+
+			const float alpha_raw = atanf(sqrtf(-d) / -q * 2.0F);
+
+			const float alpha = q > 0.0F ? 2.0F * pi - alpha_raw : alpha_raw;
+
+			r0 = cbrtf(r) * (cosf((6.0F * pi - alpha) * (1.0F / 3.0F)) + cosf((            alpha) * (1.0F / 3.0F))) - a2 * (1.0F / 3.0F);
+																							   
+			r1 = cbrtf(r) * (cosf((2.0F * pi + alpha) * (1.0F / 3.0F)) + cosf((4.0F * pi - alpha) * (1.0F / 3.0F))) - a2 * (1.0F / 3.0F);
+																							   
+			r2 = cbrtf(r) * (cosf((4.0F * pi + alpha) * (1.0F / 3.0F)) + cosf((2.0F * pi - alpha) * (1.0F / 3.0F))) - a2 * (1.0F / 3.0F);
+		}
+		else if (d > 1e-7F) // d > 0
+		{
+			const float off = sqrtf(d);
+
+			const float u = cbrtf(-q * 0.5F + off);
+
+			const float v = cbrtf(-q * 0.5F - off);
+
+			r0 = u + v - a2 * (1.0F / 3.0F);
+		}
+		else // d == 0
+		{
+			const float u = cbrtf(-q * 0.5F);
+
+			r0 = 2.0F * u - a2 * (1.0F / 3.0F);
+
+			r1 = -u - a2 * (1.0F / 3.0F);
+		}
 	}
 }
