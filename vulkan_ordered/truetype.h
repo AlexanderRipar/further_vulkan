@@ -63,7 +63,9 @@ public:
 
 	~glyph_data() noexcept;
 
-	och::vec2 get_point(uint32_t point_idx) const noexcept;
+	const och::vec2& operator[](uint32_t point_idx) const noexcept;
+
+	och::vec2& operator[](uint32_t point_idx) noexcept;
 
 	const uint32_t* contour_end_indices() const noexcept;
 

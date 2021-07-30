@@ -78,7 +78,12 @@ glyph_data::~glyph_data() noexcept
 	free(m_points);
 }
 
-och::vec2 glyph_data::get_point(uint32_t point_idx) const noexcept
+const och::vec2& glyph_data::operator[](uint32_t point_idx) const noexcept
+{
+	return m_points[point_idx];
+}
+
+och::vec2& glyph_data::operator[](uint32_t point_idx) noexcept
 {
 	return m_points[point_idx];
 }
@@ -792,19 +797,17 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 	uint32_t final_contour_cnt = 0;
 
 	{
-		uint32_t begin = 0;
+		uint32_t beg = 0;
 
 		for (uint32_t i = 0; i != contour_cnt; ++i)
 		{
 			const uint32_t end = contour_end_indices()[i] + 1;
 
-			bool prev_on_line = !is_on_line(begin);
-
-			if (end - begin > 2)		// Don't count degenerate contours
+			if (end - beg > 2)		// Don't count degenerate contours
 			{
-				final_point_cnt += 1 + (is_on_line(begin) && is_on_line(end - 1));
+				bool prev_on_line = is_on_line(end - 1);
 
-				for (uint32_t j = begin; j != end; ++j)
+				for (uint32_t j = beg; j != end; ++j)
 				{
 					const bool curr_on_line = is_on_line(j);
 
@@ -816,7 +819,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 				++final_contour_cnt;
 			}
 
-			begin = end;
+			beg = end;
 		}
 	}
 
@@ -835,25 +838,25 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 
 		uint32_t curr_idx = 0;
 
-		uint32_t begin = 0;
+		uint32_t beg = 0;
 
 		for (uint32_t i = 0; i != contour_cnt; ++i)
 		{
 			const uint32_t end = contour_end_indices()[i] + 1;
 
-			if (end - begin > 2)
+			if (end - beg > 2)
 			{
-				if (!is_on_line(begin))
+				if (!is_on_line(beg))
 				{
 					if (!is_on_line(end - 1))
-						final_points[curr_idx++] = (points()[end - 1] + points()[begin]) * 0.5F + offset;
+						final_points[curr_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
 					else
 						final_points[curr_idx++] = points()[end - 1] + offset;
 				}
 
-				bool prev_on_line = !is_on_line(begin);
+				bool prev_on_line = !is_on_line(beg);
 
-				for (uint32_t j = begin; j != end; ++j)
+				for (uint32_t j = beg; j != end - 1; ++j)
 				{
 					bool curr_on_line = is_on_line(j);
 
@@ -865,22 +868,23 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 					prev_on_line = curr_on_line;
 				}
 
-				if (is_on_line(begin))
-				{
-					if (is_on_line(end - 1))
-						final_points[curr_idx++] = (points()[end - 1] + points()[begin]) * 0.5F + offset;
+				if (is_on_line(end - 2) == is_on_line(end - 1))
+					final_points[curr_idx++] = (points()[end - 2] + points()[end - 1]) * 0.5F + offset;
 
-					final_points[curr_idx++] = points()[begin] + offset;
+				if (!(!is_on_line(beg) && is_on_line(end - 1)))
+				{
+					final_points[curr_idx++] = points()[end - 1];
+
+					if (is_on_line(end - 1))
+						final_points[curr_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
 				}
 
 				final_contour_ends[i] = curr_idx;
 			}
 
-			begin = end;
+			beg = end;
 		}
 	}
-
-	// return decompressed data
 
 	return glyph_data(final_contour_cnt, final_point_cnt, glyph_metrics(0.0F, metrics.x_size(), 0.0F, metrics.y_size(), metrics.advance_width(), metrics.left_side_bearing() - metrics.x_min()), final_points);
 }
