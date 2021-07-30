@@ -100,7 +100,7 @@ och::err_info font_testing() noexcept
 
 		for (uint32_t j = beg; j != end; ++j)
 		{
-			const och::vec2 p = glyph.get_point(j);
+			const och::vec2 p = glyph[j];
 
 			och::print("{:3>} ({:3>}):   ({}, {})\n", j - beg, j, p.x, p.y);
 

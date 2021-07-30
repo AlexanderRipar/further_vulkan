@@ -97,7 +97,41 @@ public:
 
 	och::err_info from_ttf(const glyph_data& glyph) noexcept
 	{
-		//constexpr float EDGE_THRESHOLD = 0.05233597865F; // sin(3°)
+		constexpr float EDGE_THRESHOLD = 0.05233597865F; // sin(3°)
+
+		simple_vec<uint32_t> corner_indices(16);
+
+		for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+		{
+			const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
+
+			{
+				const och::vec2 prev = glyph[end - 2];
+
+				const och::vec2 curr = glyph[beg];
+
+				const och::vec2 next = glyph[beg + 1];
+
+				const och::vec2 a = curr - prev;
+
+				const och::vec2 b = next - curr;
+
+				if (och::cross(a, b) > EDGE_THRESHOLD && och::dot(a, b) > 0.0F)
+					corner_indices.add(beg);
+			}
+
+			for (uint32_t j = beg + 1; j != end - 1; ++j)
+			{
+
+			}
+		}
+
+
+
+
+
+
+
 		//
 		//// Find edges, i.e. Non-smooth transitions between the curves of a contour
 		//
