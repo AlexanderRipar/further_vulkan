@@ -151,4 +151,42 @@ namespace och
 			r1 = -u - a2 * one_third;
 		}
 	}
+
+	inline void solve_cubic_sturm_0_1(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
+	{
+		const float b2 = 3.0F * a3;
+
+		const float b1 = 2.0F * a2;
+
+		const float b0 = a1;
+
+		float c1;
+
+		float c0;
+
+		float d0;
+
+		deg3_deg2_poly_remainder(a3, a2, a1, a0, b2, b1, b0, c1, c0);
+
+		deg2_deg1_poly_remainder(b2, b1, b0, c1, c0, d0);
+
+
+	}
+
+	__forceinline void deg3_deg2_poly_remainder(float a3, float a2, float a1, float a0, float b2, float b1, float b0, float& c1, float& c0)
+	{
+		const float r2 = a3 / a2;
+
+
+	}
+
+	__forceinline void deg2_deg1_poly_remainder(float b2, float b1, float b0, float c1, float c0, float& d0)
+	{
+
+	}
+
+	__forceinline float evaluate_root(float hi, float lo, uint32_t max_iter, float a3, float a2, float a1, float a0, float b2, float b1, float b0, float c1, float c0, float d0)
+	{
+		return NAN;
+	}
 }
