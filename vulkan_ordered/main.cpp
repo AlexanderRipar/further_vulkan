@@ -75,7 +75,7 @@ och::err_info font_testing() noexcept
 	if (!ttf)
 		return MSG_ERROR("Could not open ttf file");
 
-	glyph_data glyph = ttf.get_glyph('.'); // 0x01DF (ǟ)
+	glyph_data glyph = ttf.get_glyph('G'); // 0x01DF (ǟ)
 
 	constexpr uint32_t bmp_size = 256;
 
@@ -112,7 +112,26 @@ och::err_info font_testing() noexcept
 
 	check(sdf.from_glyph(glyph, 512, 512));
 
-	sdf.save_bmp("textures/glyph_sdf.bmp", true);
+	
+
+	sdf.save_bmp("textures/glyph_sdf.bmp", true, 
+		[](float dst) noexcept -> texel_b8g8r8
+		{
+			dst = dst * 0.5F + 0.5F;
+
+			if (dst < 0.1666F)
+				return { 0, 0, static_cast<uint8_t>((dst - 0.0000F) * 6 * 255) };
+			if (dst < 0.3333F)
+				return { 0, static_cast<uint8_t>((dst - 0.1666F) * 6 * 128), static_cast<uint8_t>((dst - 0.1666F) * 6 * 128) };
+			if (dst < 0.5000F)
+				return { 0, static_cast<uint8_t>((dst - 0.3333F) * 6 * 255), 0 };
+			if (dst < 0.6666F)
+				return { static_cast<uint8_t>((dst - 0.5000F) * 6 * 128), static_cast<uint8_t>((dst - 0.5000F) * 6 * 128), 0 };
+			if (dst < 0.8333F)
+				return { static_cast<uint8_t>((dst - 0.6666F) * 6 * 255), 0, 0 };
+			return { static_cast<uint8_t>((dst - 0.8333F) * 6 * 128), 0, static_cast<uint8_t>((dst - 0.8333F) * 6 * 128) };
+		}
+	);
 
 	return {};
 }
