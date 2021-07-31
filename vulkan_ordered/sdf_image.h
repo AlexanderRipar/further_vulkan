@@ -137,7 +137,9 @@ public:
 						min_curve = end - 2;
 				}
 
-				m_data[x + y * m_width] = (static_cast<float>(min_curve) / glyph.point_cnt()) * 2.0F - 1.0F; // sqrtf(min_dst_sq)* min_dst_sgn;
+				//m_data[x + y * m_width] = (static_cast<float>(min_curve) / glyph.point_cnt()) * 2.0F - 1.0F;
+
+				m_data[x + y * m_width] = sqrtf(min_dst_sq)* min_dst_sgn;
 			}
 
 			return {};

@@ -98,45 +98,45 @@ och::err_info font_testing() noexcept
 		//		return { 0, c, c };
 		//}
 		
-		, [](float dst) noexcept -> texel_b8g8r8
-		{
-			dst = dst * 0.5F + 0.5F;
-		
-			if (dst < 0.1666F)
-			{
-				const uint8_t v = static_cast<uint8_t>(((dst * 5.0F) + 0.1666F) * 255.0F);
-		
-				return { 0, 0, v };
-			}
-			if (dst < 0.3333F)
-			{
-				const uint8_t v = static_cast<uint8_t>((((dst - 0.1666F) * 5.0F) + 0.1666F) * 128.0F);
-		
-				return { 0, v, v };
-			}
-			if (dst < 0.5000F)
-			{
-				const uint8_t v = static_cast<uint8_t>((((dst - 0.3333F) * 5.0F) + 0.1666F) * 255.0F);
-		
-				return { 0, v, 0 };
-			}
-			if (dst < 0.6666F)
-			{
-				const uint8_t v = static_cast<uint8_t>((((dst - 0.5000F) * 5.0F) + 0.1666F) * 128.0F);
-		
-				return { v, v, 0 };
-			}
-			if (dst < 0.8333F)
-			{
-				const uint8_t v = static_cast<uint8_t>((((dst - 0.6666F) * 5.0F) + 0.1666F) * 255.0F);
-		
-				return { v, 0, 0 };
-			}
-		
-			const uint8_t v = static_cast<uint8_t>((((dst - 0.8333F) * 5.0F) + 0.1666F) * 128.0F);
-		
-			return { v, 0, v };
-		}
+		//, [](float dst) noexcept -> texel_b8g8r8
+		//{
+		//	dst = dst * 0.5F + 0.5F;
+		//
+		//	if (dst < 0.1666F)
+		//	{
+		//		const uint8_t v = static_cast<uint8_t>(((dst * 5.0F) + 0.1666F) * 255.0F);
+		//
+		//		return { 0, 0, v };
+		//	}
+		//	if (dst < 0.3333F)
+		//	{
+		//		const uint8_t v = static_cast<uint8_t>((((dst - 0.1666F) * 5.0F) + 0.1666F) * 128.0F);
+		//
+		//		return { 0, v, v };
+		//	}
+		//	if (dst < 0.5000F)
+		//	{
+		//		const uint8_t v = static_cast<uint8_t>((((dst - 0.3333F) * 5.0F) + 0.1666F) * 255.0F);
+		//
+		//		return { 0, v, 0 };
+		//	}
+		//	if (dst < 0.6666F)
+		//	{
+		//		const uint8_t v = static_cast<uint8_t>((((dst - 0.5000F) * 5.0F) + 0.1666F) * 128.0F);
+		//
+		//		return { v, v, 0 };
+		//	}
+		//	if (dst < 0.8333F)
+		//	{
+		//		const uint8_t v = static_cast<uint8_t>((((dst - 0.6666F) * 5.0F) + 0.1666F) * 255.0F);
+		//
+		//		return { v, 0, 0 };
+		//	}
+		//
+		//	const uint8_t v = static_cast<uint8_t>((((dst - 0.8333F) * 5.0F) + 0.1666F) * 128.0F);
+		//
+		//	return { v, 0, v };
+		//}
 	);
 
 	bitmap_file sdf_bmp("textures/glyph_sdf.bmp", och::fio::open_normal);
