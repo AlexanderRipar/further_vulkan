@@ -75,22 +75,97 @@ och::err_info font_testing() noexcept
 	if (!ttf)
 		return MSG_ERROR("Could not open ttf file");
 
-	glyph_data glyph = ttf.get_glyph('G'); // 0x01DF (ǟ)
+	glyph_data glyph = ttf.get_glyph(0x01DF); // 0x01DF (ǟ)
 
-	constexpr uint32_t bmp_size = 256;
+	//constexpr uint32_t bmp_size = 256;
+	//
+	//bitmap_file bmp("textures\\glyph_points.bmp", och::fio::open_truncate, bmp_size, bmp_size);
+	//
+	//if (!bmp)
+	//	return MSG_ERROR("Could not open bmp file");
+	//
+	//constexpr texel_b8g8r8 contour_colours[4][2]
+	//{
+	//	{{0x00, 0x00, 0xFF}, {0x00, 0x00, 0x5F}},
+	//	{{0x00, 0xFF, 0x00}, {0x00, 0x5F, 0x00}},
+	//	{{0xFF, 0x00, 0x00}, {0x5F, 0x00, 0x00}},
+	//	{{0x00, 0xFF, 0xFF}, {0x00, 0x5F, 0x6F}},
+	//};
+	//
+	//for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
+	//{
+	//	const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
+	//
+	//	och::print("\n       Contour {}:\n", i);
+	//
+	//	for (uint32_t j = beg; j != end; ++j)
+	//	{
+	//		const och::vec2 p = glyph[j];
+	//
+	//		och::print("{:3>} ({:3>}):   ({}, {})\n", j - beg, j, p.x, p.y);
+	//
+	//		bmp(static_cast<uint32_t>(p.x * bmp_size), static_cast<uint32_t>(p.y * bmp_size)) = contour_colours[i & 3][((j - beg) & 1)];
+	//	}
+	//}
 
-	bitmap_file bmp("textures\\glyph_points.bmp", och::fio::open_truncate, bmp_size, bmp_size);
+	constexpr uint32_t sdf_size = 512;
 
-	if (!bmp)
-		return MSG_ERROR("Could not open bmp file");
+	sdf_image sdf;
 
-	constexpr texel_b8g8r8 contour_colours[4][2]
-	{
-		{{0x00, 0x00, 0xFF}, {0x00, 0x00, 0x5F}},
-		{{0x00, 0xFF, 0x00}, {0x00, 0x5F, 0x00}},
-		{{0xFF, 0x00, 0x00}, {0x5F, 0x00, 0x00}},
-		{{0x00, 0xFF, 0xFF}, {0x00, 0x5F, 0x6F}},
-	};
+	check(sdf.from_glyph(glyph, sdf_size, sdf_size));
+
+	
+
+	sdf.save_bmp("textures/glyph_sdf.bmp", true, 
+		[](float dst) noexcept -> texel_b8g8r8
+		{
+			dst = dst * 0.5F + 0.5F;
+
+			//if (dst == 0.0F)
+			//	return { 0xFF, 0xFF, 0xFF };
+
+			if (dst < 0.1666F)
+			{
+				const uint8_t v = static_cast<uint8_t>(((dst * 5.0F) + 0.1666F) * 255.0F);
+
+				return { 0, 0, v };
+			}
+			if (dst < 0.3333F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.1666F) * 5.0F) + 0.1666F) * 128.0F);
+
+				return { 0, v, v };
+			}
+			if (dst < 0.5000F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.3333F) * 5.0F) + 0.1666F) * 255.0F);
+				
+				return { 0, v, 0 };
+			}
+			if (dst < 0.6666F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.5000F) * 5.0F) + 0.1666F) * 128.0F);
+
+				return { v, v, 0 };
+			}
+			if (dst < 0.8333F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.6666F) * 5.0F) + 0.1666F) * 255.0F);
+
+				return { v, 0, 0 };
+			}
+
+			const uint8_t v = static_cast<uint8_t>((((dst - 0.8333F) * 5.0F) + 0.1666F) * 128.0F);
+
+			return { v, 0, v };
+		}
+	);
+
+	bitmap_file sdf_bmp("textures/glyph_sdf.bmp", och::fio::open_normal);
+
+	if (!sdf_bmp)
+		return MSG_ERROR("Could not open sdf-bitmap for drawing outline-points");
+
 
 	for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
 	{
@@ -104,34 +179,11 @@ och::err_info font_testing() noexcept
 
 			och::print("{:3>} ({:3>}):   ({}, {})\n", j - beg, j, p.x, p.y);
 
-			bmp(static_cast<uint32_t>(p.x * bmp_size), static_cast<uint32_t>(p.y * bmp_size)) = contour_colours[i & 3][((j - beg) & 1)];
+			const texel_b8g8r8 c = ((j - beg) & 1) ? col::b8g8r8::black : col::b8g8r8::white;
+
+			sdf_bmp(static_cast<uint32_t>(p.x * sdf_size), static_cast<uint32_t>(p.y * sdf_size)) = c;
 		}
 	}
-
-	sdf_image sdf;
-
-	check(sdf.from_glyph(glyph, 512, 512));
-
-	
-
-	sdf.save_bmp("textures/glyph_sdf.bmp", true, 
-		[](float dst) noexcept -> texel_b8g8r8
-		{
-			dst = dst * 0.5F + 0.5F;
-
-			if (dst < 0.1666F)
-				return { 0, 0, static_cast<uint8_t>((dst - 0.0000F) * 6 * 255) };
-			if (dst < 0.3333F)
-				return { 0, static_cast<uint8_t>((dst - 0.1666F) * 6 * 128), static_cast<uint8_t>((dst - 0.1666F) * 6 * 128) };
-			if (dst < 0.5000F)
-				return { 0, static_cast<uint8_t>((dst - 0.3333F) * 6 * 255), 0 };
-			if (dst < 0.6666F)
-				return { static_cast<uint8_t>((dst - 0.5000F) * 6 * 128), static_cast<uint8_t>((dst - 0.5000F) * 6 * 128), 0 };
-			if (dst < 0.8333F)
-				return { static_cast<uint8_t>((dst - 0.6666F) * 6 * 255), 0, 0 };
-			return { static_cast<uint8_t>((dst - 0.8333F) * 6 * 128), 0, static_cast<uint8_t>((dst - 0.8333F) * 6 * 128) };
-		}
-	);
 
 	return {};
 }

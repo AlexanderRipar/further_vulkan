@@ -131,13 +131,13 @@ public:
 
 					for (uint32_t j = beg; j + 2 < end; j += 2)
 						if (evaluate_curve_for_pixel(glyph[j], glyph[j + 1], glyph[j + 2], p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
-							min_curve = j >> 1;
+							min_curve = j;
 
 					if (evaluate_curve_for_pixel(glyph[end - 2], glyph[end - 1], glyph[beg], p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
-						min_curve = (end - 2) >> 1;
+						min_curve = end - 2;
 				}
 
-				m_data[x + y * m_width] = (static_cast<float>(min_curve) / (glyph.point_cnt() >> 1)) * 2.0F - 1.0F; // sqrtf(min_dst_sq)* min_dst_sgn;
+				m_data[x + y * m_width] = (static_cast<float>(min_curve) / glyph.point_cnt()) * 2.0F - 1.0F; // sqrtf(min_dst_sq)* min_dst_sgn;
 			}
 
 			return {};
@@ -357,7 +357,7 @@ private:
 			else if (min_t < 0.0F)
 				min_t = 0.0F;
 
-			min_p = p0 * (1 - min_t) + p2 * min_t;
+			min_p = p0 * (1.0F - min_t) + p2 * min_t;
 
 			min_dst_sq = och::squared_magnitude(p - min_p);
 		}
@@ -374,7 +374,7 @@ private:
 
 				global_min_dst_sgn = och::cross(deriv, min_p - p) < 0.0F ? -1.0F : 1.0F;
 
-				global_min_dst_max_orthogonality = och::abs(orthogonality);
+				global_min_dst_max_orthogonality = orthogonality;
 
 				return true;
 			}
