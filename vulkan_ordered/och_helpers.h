@@ -96,59 +96,59 @@ namespace och
 		return n + 1;
 	}
 
-	static inline void cubic_poly_roots(float a3_, float a2_, float a1_, float a0_, float& r0, float& r1, float& r2) noexcept
+	static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
 	{
-		constexpr double one_third = 1.0 / 3.0;
+		constexpr float one_third = 1.0F / 3.0F;
 
-		const double a3_inv = 1.0F / a3_;
+		constexpr float pi = 3.14159265359F;
 
-		const double a2 = a2_ * a3_inv;
+		const float a3_inv = 1.0F / a3;
 
-		const double a1 = a1_ * a3_inv;
+		a2 *= a3_inv;
 
-		const double a0 = a0_ * a3_inv;
+		a1 *= a3_inv;
 
-		const double p = a1 - (a2 * a2) * one_third;
+		a0 *= a3_inv;
 
-		const double q = a2 * a2 * a2 * (2.0 / 27.0) - a2 * a1 * one_third + a0;
+		const float p = a1 - (a2 * a2) * one_third;
 
-		const double d = q * q * (1.0 / 4.0) + p * p * p * (1.0 / 27.0);
+		const float q = a2 * a2 * a2 * (2.0F / 27.0F) - a2 * a1 * one_third + a0;
+
+		const float d = q * q * (1.0F / 4.0F) + p * p * p * (1.0F / 27.0F);
 
 		r0 = r1 = r2 = INFINITY;
 
 		if (d < -1e-7F) // d < 0
 		{
-			constexpr double pi = 3.14159265359;
+			const float r = sqrtf(-p * p * p * (1.0F / 27.0F));
 
-			const double r = sqrt(-p * p * p * (1.0 / 27.0));
+			const float alpha_raw = atanf(sqrtf(-d) / -q * 2.0F);
 
-			const double alpha_raw = atan(sqrt(-d) / -q * 2.0);
+			const float alpha = q > 0.0F ? 2.0F * pi - alpha_raw : alpha_raw;
 
-			const double alpha = q > 0.0 ? 2.0 * pi - alpha_raw : alpha_raw;
-
-			r0 = static_cast<float>(cbrt(r) * (cos((6.0 * pi - alpha) * one_third) + cos((           alpha) * one_third)) - a2 * one_third);
-																							   
-			r1 = static_cast<float>(cbrt(r) * (cos((2.0 * pi + alpha) * one_third) + cos((4.0 * pi - alpha) * one_third)) - a2 * one_third);
-																							   
-			r2 = static_cast<float>(cbrt(r) * (cos((4.0 * pi + alpha) * one_third) + cos((2.0 * pi - alpha) * one_third)) - a2 * one_third);
+			r0 = cbrtf(r) * (cosf((6.0F * pi - alpha) * one_third) + cosf((            alpha) * one_third)) - a2 * one_third;
+																		   
+			r1 = cbrtf(r) * (cosf((2.0F * pi + alpha) * one_third) + cosf((4.0F * pi - alpha) * one_third)) - a2 * one_third;
+																		   
+			r2 = cbrtf(r) * (cosf((4.0F * pi + alpha) * one_third) + cosf((2.0F * pi - alpha) * one_third)) - a2 * one_third;
 		}
 		else if (d > 1e-7F) // d > 0
 		{
-			const double off = sqrt(d);
+			const float off = sqrtf(d);
 
-			const double u = cbrt(-q * 0.5 + off);
+			const float u = cbrtf(-q * 0.5F + off);
 
-			const double v = cbrt(-q * 0.5 - off);
+			const float v = cbrtf(-q * 0.5F - off);
 
-			r0 = static_cast<float>(u + v - a2 * one_third);
+			r0 = u + v - a2 * one_third;
 		}
 		else // d == 0
 		{
-			const double u = cbrt(-q * 0.5);
+			const float u = cbrtf(-q * 0.5F);
 
-			r0 = static_cast<float>(2.0 * u - a2 * one_third);
+			r0 = 2.0F * u - a2 * one_third;
 
-			r1 = static_cast<float>(-u - a2 * one_third);
+			r1 = -u - a2 * one_third;
 		}
 	}
 }
