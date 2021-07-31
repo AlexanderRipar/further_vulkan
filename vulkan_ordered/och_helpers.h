@@ -98,95 +98,154 @@ namespace och
 
 	static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
 	{
-		constexpr float one_third = 1.0F / 3.0F;
+		constexpr float TOO_SMALL = 1e-7F;
 
-		constexpr float pi = 3.14159265359F;
+		constexpr float PI = 3.14159265359F;
+		
+		a2 /= a3;
 
-		const float a3_inv = 1.0F / a3;
+		a1 /= a3;
 
-		a2 *= a3_inv;
+		a0 /= a3;
 
-		a1 *= a3_inv;
+		const float q = (3.0F * a1 - (a2 * a2)) / 9.0F;
 
-		a0 *= a3_inv;
+		const float r = (-(27.0F * a0) + a2 * (9.0F * a1 - 2.0F * a2 * a2)) / 54.0F;
 
-		const float p = a1 - (a2 * a2) * one_third;
+		const float disc = q * q * q + r * r;
 
-		const float q = a2 * a2 * a2 * (2.0F / 27.0F) - a2 * a1 * one_third + a0;
+		const float term_1 = a2 / 3.0F;
 
-		const float d = q * q * (1.0F / 4.0F) + p * p * p * (1.0F / 27.0F);
-
-		r0 = r1 = r2 = INFINITY;
-
-		if (d < -1e-7F) // d < 0
+		if (disc > TOO_SMALL)
 		{
-			const float r = sqrtf(-p * p * p * (1.0F / 27.0F));
+			const float disc_sqrt = sqrtf(disc);
 
-			const float alpha_raw = atanf(sqrtf(-d) / -q * 2.0F);
+			float s = r + disc_sqrt;
 
-			const float alpha = q > 0.0F ? 2.0F * pi - alpha_raw : alpha_raw;
+			s = s < 0.0F ? -powf(-s, 1.0F / 3.0F) : powf(s, 1.0F / 3.0F);
 
-			r0 = cbrtf(r) * (cosf((6.0F * pi - alpha) * one_third) + cosf((            alpha) * one_third)) - a2 * one_third;
-																		   
-			r1 = cbrtf(r) * (cosf((2.0F * pi + alpha) * one_third) + cosf((4.0F * pi - alpha) * one_third)) - a2 * one_third;
-																		   
-			r2 = cbrtf(r) * (cosf((4.0F * pi + alpha) * one_third) + cosf((2.0F * pi - alpha) * one_third)) - a2 * one_third;
+			float t = r - disc_sqrt;
+
+			t = t < 0.0F ? -powf(-t, 1.0F / 3.0F) : powf(t, 1.0F / 3.0F);
+
+			r0 = -term_1 + s + t;
+
+			r1 = INFINITY;
+
+			r2 = INFINITY;
 		}
-		else if (d > 1e-7F) // d > 0
+		else if (disc < -TOO_SMALL)
 		{
-			const float off = sqrtf(d);
+			const float dummy = acosf(r / sqrtf(-q * q * q));
 
-			const float u = cbrtf(-q * 0.5F + off);
+			const float r13 = 2.0F * sqrtf(-q);
 
-			const float v = cbrtf(-q * 0.5F - off);
+			r0 = -term_1 + r13 * cosf(dummy / 3.0F);
 
-			r0 = u + v - a2 * one_third;
+			r1 = -term_1 + r13 * cosf((dummy + 2.0F * PI) / 3.0F);
+
+			r2 = -term_1 + r13 * cosf((dummy + 4.0F * PI) / 3.0F);
 		}
-		else // d == 0
+		else
 		{
-			const float u = cbrtf(-q * 0.5F);
+			const float r13 = r < 0.0F ? -powf(-r, 1.0F / 3.0F) : powf(r, 1.0F / 3.0F);
 
-			r0 = 2.0F * u - a2 * one_third;
+			r0 = -term_1 + 2.0F * r13;
 
-			r1 = -u - a2 * one_third;
+			r1 = -(r13 + term_1);
+
+			r2 = INFINITY;
 		}
+
+		//constexpr float one_third = 1.0F / 3.0F;
+		//
+		//constexpr float pi = 3.14159265359F;
+		//
+		//const float a3_inv = 1.0F / a3;
+		//
+		//a2 *= a3_inv;
+		//
+		//a1 *= a3_inv;
+		//
+		//a0 *= a3_inv;
+		//
+		//const float p = a1 - (a2 * a2) * one_third;
+		//
+		//const float q = a2 * a2 * a2 * (2.0F / 27.0F) - a2 * a1 * one_third + a0;
+		//
+		//const float d = q * q * (1.0F / 4.0F) + p * p * p * (1.0F / 27.0F);
+		//
+		//r0 = r1 = r2 = INFINITY;
+		//
+		//if (d < -1e-7F) // d < 0
+		//{
+		//	const float r = sqrtf(-p * p * p * (1.0F / 27.0F));
+		//
+		//	const float alpha_raw = atanf(sqrtf(-d) / -q * 2.0F);
+		//
+		//	const float alpha = q > 0.0F ? 2.0F * pi - alpha_raw : alpha_raw;
+		//
+		//	r0 = cbrtf(r) * (cosf((6.0F * pi - alpha) * one_third) + cosf((            alpha) * one_third)) - a2 * one_third;
+		//																   
+		//	r1 = cbrtf(r) * (cosf((2.0F * pi + alpha) * one_third) + cosf((4.0F * pi - alpha) * one_third)) - a2 * one_third;
+		//																   
+		//	r2 = cbrtf(r) * (cosf((4.0F * pi + alpha) * one_third) + cosf((2.0F * pi - alpha) * one_third)) - a2 * one_third;
+		//}
+		//else if (d > 1e-7F) // d > 0
+		//{
+		//	const float off = sqrtf(d);
+		//
+		//	const float u = cbrtf(-q * 0.5F + off);
+		//
+		//	const float v = cbrtf(-q * 0.5F - off);
+		//
+		//	r0 = u + v - a2 * one_third;
+		//}
+		//else // d == 0
+		//{
+		//	const float u = cbrtf(-q * 0.5F);
+		//
+		//	r0 = 2.0F * u - a2 * one_third;
+		//
+		//	r1 = -u - a2 * one_third;
+		//}
 	}
 
-	inline void solve_cubic_sturm_0_1(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
-	{
-		const float b2 = 3.0F * a3;
-
-		const float b1 = 2.0F * a2;
-
-		const float b0 = a1;
-
-		float c1;
-
-		float c0;
-
-		float d0;
-
-		deg3_deg2_poly_remainder(a3, a2, a1, a0, b2, b1, b0, c1, c0);
-
-		deg2_deg1_poly_remainder(b2, b1, b0, c1, c0, d0);
-
-
-	}
-
-	__forceinline void deg3_deg2_poly_remainder(float a3, float a2, float a1, float a0, float b2, float b1, float b0, float& c1, float& c0)
-	{
-		const float r2 = a3 / a2;
-
-
-	}
-
-	__forceinline void deg2_deg1_poly_remainder(float b2, float b1, float b0, float c1, float c0, float& d0)
-	{
-
-	}
-
-	__forceinline float evaluate_root(float hi, float lo, uint32_t max_iter, float a3, float a2, float a1, float a0, float b2, float b1, float b0, float c1, float c0, float d0)
-	{
-		return NAN;
-	}
+	//__forceinline void deg3_deg2_poly_remainder(float a3, float a2, float a1, float a0, float b2, float b1, float b0, float& c1, float& c0)
+	//{
+	//	const float r2 = a3 / a2;
+	//
+	//
+	//}
+	//
+	//__forceinline void deg2_deg1_poly_remainder(float b2, float b1, float b0, float c1, float c0, float& d0)
+	//{
+	//
+	//}
+	//
+	//__forceinline float evaluate_root(float hi, float lo, uint32_t max_iter, float a3, float a2, float a1, float a0, float b2, float b1, float b0, float c1, float c0, float d0)
+	//{
+	//	return NAN;
+	//}
+	//
+	//inline void solve_cubic_sturm_0_1(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
+	//{
+	//	const float b2 = 3.0F * a3;
+	//
+	//	const float b1 = 2.0F * a2;
+	//
+	//	const float b0 = a1;
+	//
+	//	float c1;
+	//
+	//	float c0;
+	//
+	//	float d0;
+	//
+	//	deg3_deg2_poly_remainder(a3, a2, a1, a0, b2, b1, b0, c1, c0);
+	//
+	//	deg2_deg1_poly_remainder(b2, b1, b0, c1, c0, d0);
+	//
+	//
+	//}
 }
