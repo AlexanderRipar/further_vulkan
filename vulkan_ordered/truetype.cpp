@@ -146,7 +146,7 @@ uint32_t cmap_f4(const void* raw_tbl, uint32_t cpt) noexcept
 
 	const f4_tbl* tbl = static_cast<const f4_tbl*>(raw_tbl);
 
-	uint16_t seg_cnt = be_to_le(tbl->seg_cnt_x2) >> 1;
+	const uint16_t seg_cnt = be_to_le(tbl->seg_cnt_x2) >> 1;
 
 	const uint16_t* end_codes = reinterpret_cast<const uint16_t*>(tbl + 1);
 
@@ -172,10 +172,10 @@ uint32_t cmap_f4(const void* raw_tbl, uint32_t cpt) noexcept
 			{
 				const uint16_t id = be_to_le(*(id_range_offsets + mid + (be_to_le(id_range_offsets[mid]) >> 1) + short_cpt - beg_code));
 
-				return id ? id + be_to_le(id_deltas[mid]) : id;
+				return id ? static_cast<uint16_t>(id + be_to_le(id_deltas[mid])) : id;
 			}
 			else
-				return short_cpt - be_to_le(id_deltas[mid]);
+				return static_cast<uint16_t>(short_cpt + static_cast<int16_t>(be_to_le(id_deltas[mid])));
 		}
 		else if (beg_code > short_cpt)
 			hi = mid - 1;
@@ -287,7 +287,7 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 	m_file_type = tentative_file_type;
 }
 
-glyph_data truetype_file::get_glyph(char32_t codepoint) const noexcept
+glyph_data truetype_file::get_glyph_data(char32_t codepoint) const noexcept
 {
 	const uint32_t glyph_id = m_codepoint_mapper.get_glyph_id(codepoint);
 
@@ -295,7 +295,14 @@ glyph_data truetype_file::get_glyph(char32_t codepoint) const noexcept
 
 	internal_glyph_data glf = get_glyph_data_recursive(glyph_id, metrics_glyph_id);
 
-	return glf.to_glyph_data(get_glyph_metrics(metrics_glyph_id), m_x_min_global, m_y_min_global);
+	return glf.to_glyph_data(internal_get_glyph_metrics(metrics_glyph_id), m_x_min_global, m_y_min_global);
+}
+
+glyph_metrics truetype_file::get_glyph_metrics(char32_t codepoint) const noexcept
+{
+	const uint32_t glyph_id = m_codepoint_mapper.get_glyph_id(codepoint);
+
+	return internal_get_glyph_metrics(glyph_id);
 }
 
 truetype_file::operator bool() const noexcept
@@ -651,7 +658,7 @@ const truetype_file::glyph_header* truetype_file::find_glyph(uint32_t glyph_id) 
 	return reinterpret_cast<const glyph_header*>(static_cast<const uint8_t*>(m_glyph_data) + glyph_offset);
 }
 
-glyph_metrics truetype_file::get_glyph_metrics(uint32_t glyph_id) const noexcept
+glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const noexcept
 {
 	if (glyph_id >= m_glyph_cnt)
 		return { 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };

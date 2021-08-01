@@ -305,7 +305,9 @@ public:
 
 	truetype_file(const char* filename) noexcept;
 
-	glyph_data get_glyph(char32_t codepoint) const noexcept;
+	glyph_data get_glyph_data(char32_t codepoint) const noexcept;
+
+	glyph_metrics get_glyph_metrics(char32_t codepoint) const noexcept;
 
 	operator bool() const noexcept;
 
@@ -319,7 +321,7 @@ private:
 
 	const glyph_header* find_glyph(uint32_t glyph_id) const noexcept;
 
-	glyph_metrics get_glyph_metrics(uint32_t glyph_id) const noexcept;
+	glyph_metrics internal_get_glyph_metrics(uint32_t glyph_id) const noexcept;
 
 	static file_type query_file_type(const och::mapped_file<file_header>& file) noexcept;
 
