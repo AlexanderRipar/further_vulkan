@@ -244,6 +244,7 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h" />
     <ClInclude Include="binary_image.h" />
     <ClInclude Include="bitmap.h" />
+    <ClInclude Include="sdf_glyph_atlas.h" />
     <ClInclude Include="simple_vec.h" />
     <ClInclude Include="truetype.h" />
     <ClInclude Include="texels.h" />

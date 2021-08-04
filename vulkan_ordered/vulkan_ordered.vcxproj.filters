@@ -152,6 +152,9 @@
     <ClInclude Include="simple_vec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="sdf_glyph_atlas.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\msvc_compile_shaders.bat">
