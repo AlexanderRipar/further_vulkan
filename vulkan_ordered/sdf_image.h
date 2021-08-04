@@ -37,6 +37,131 @@ public:
 
 	using colour_mapper_fn = texel_b8g8r8(*) (float) noexcept;
 
+	struct colour_mapper
+	{
+		static texel_b8g8r8 linear_distance(float dst) noexcept
+		{
+			const uint8_t c = static_cast<uint8_t>(dst * 0.5F + 0.5F);
+
+			if (dst < 0.0F)
+				return { c, c,c };
+			else
+				return { c, static_cast<uint8_t>(c >> 1), 0 };
+		}
+
+		static texel_b8g8r8 nonlinear_distance(float dst) noexcept
+		{
+			const uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); 
+			
+			if (dst < 0.0F)
+				return { c, c, c };
+			else
+				return { c, static_cast<uint8_t>(c >> 1), 0 };
+		}
+
+		static texel_b8g8r8 binary(float dst) noexcept
+		{
+			if (dst < 0.0F)
+				return col::b8g8r8::white;
+			else
+				return col::b8g8r8::black;
+		}
+
+		static texel_b8g8r8 bands(float dst) noexcept
+		{
+			dst = dst * 0.5F + 0.5F;
+			
+			if (dst < 0.1666F)
+			{
+				const uint8_t v = static_cast<uint8_t>(((dst * 5.0F) + 0.1666F) * 255.0F);
+			
+				return { 0, 0, v };
+			}
+			if (dst < 0.3333F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.1666F) * 5.0F) + 0.1666F) * 128.0F);
+			
+				return { 0, v, v };
+			}
+			if (dst < 0.5000F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.3333F) * 5.0F) + 0.1666F) * 255.0F);
+			
+				return { 0, v, 0 };
+			}
+			if (dst < 0.6666F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.5000F) * 5.0F) + 0.1666F) * 128.0F);
+			
+				return { v, v, 0 };
+			}
+			if (dst < 0.8333F)
+			{
+				const uint8_t v = static_cast<uint8_t>((((dst - 0.6666F) * 5.0F) + 0.1666F) * 255.0F);
+			
+				return { v, 0, 0 };
+			}
+			
+			const uint8_t v = static_cast<uint8_t>((((dst - 0.8333F) * 5.0F) + 0.1666F) * 128.0F);
+			
+			return { v, 0, v };
+		}
+
+		static texel_b8g8r8 quadratic_waves(float dst) noexcept
+		{
+			constexpr float mod_fct = 0.01F;
+
+			const float dst_1_0 = dst * 0.5F + 0.5F;
+
+			const float dst_mod = fmodf(dst_1_0, mod_fct) * (1.0F / mod_fct);
+
+			const float dst_lo = dst_mod - 0.5F;
+
+			const float v = 1.0F - (4.0F * dst_lo * dst_lo);
+
+			const uint8_t c = static_cast<uint8_t>(v * 128.0F + 112.0F);
+
+			if (dst < 0.0F)
+				return { c, c, static_cast<uint8_t>(255 - c) };
+			else
+				return { static_cast<uint8_t>(255 - c), c,c };
+		}
+
+		static texel_b8g8r8 quartic_waves(float dst) noexcept
+		{
+			constexpr float mod_fct = 0.01F;
+			
+			const float dst_1_0 = dst * 0.5F + 0.5F;
+			
+			const float dst_mod = fmodf(dst_1_0, mod_fct) * (1.0F / mod_fct);
+			
+			const float dst_lo = dst_mod - 0.5F;
+			
+			const float v = 1.0F - (16.0F * dst_lo * dst_lo * dst_lo * dst_lo);
+			
+			const uint8_t c = static_cast<uint8_t>(v * 128.0F + 112.0F);
+			
+			if (dst < 0.0F)
+				return { c, c, static_cast<uint8_t>(255 - c) };
+			else
+				return { static_cast<uint8_t>(255 - c), c,c };
+		}
+
+		static texel_b8g8r8 layers(float dst) noexcept
+		{
+			const float dst_1_0 = dst * 0.5F + 0.5F;
+
+			const float dst_mod = fmodf(dst_1_0, 0.01F);
+
+			uint8_t c = static_cast<uint8_t>((-0.1F / (dst_mod * 100.0F + 0.1F) + 1.0F) * 256.0F);
+
+			if (dst < 0.0F)
+				return { c, c, 0 };
+			else
+				return { 0, c, c };
+		}
+	};
+
 	och::err_info from_bim(const binary_image& img)
 	{
 		constexpr point INSIDE = { 0, 0 }, OUTSIDE = { 0x3FFF, 0x3FFF };
@@ -130,8 +255,12 @@ public:
 					const och::vec2 p(static_cast<float>(x) * inv_width, static_cast<float>(y) * inv_height);
 
 					for (uint32_t j = beg; j + 2 < end; j += 2)
-						if (evaluate_curve_for_pixel(glyph[j], glyph[j + 1], glyph[j + 2], p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
+					{
+						const och::vec2 p0 = glyph[j], p1 = glyph[j + 1], p2 = glyph[j + 2];
+
+						if (evaluate_curve_for_pixel(p0, p1, p2, p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
 							min_curve = j;
+					}
 
 					if (evaluate_curve_for_pixel(glyph[end - 2], glyph[end - 1], glyph[beg], p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
 						min_curve = end - 2;
@@ -145,7 +274,7 @@ public:
 			return {};
 	}
 
-	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = [](float dst) noexcept { uint8_t c = static_cast<uint8_t>((-0.1F / ((dst < 0.0F ? -dst : dst) + 0.1F) + 1.0F) * 256.0F); return dst < 0.0F ? texel_b8g8r8(c, c, c) : texel_b8g8r8(c, c >> 1, 0); })
+	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = colour_mapper::nonlinear_distance)
 	{
 		bitmap_file file(filename, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, m_width, m_height);
 
@@ -364,7 +493,7 @@ private:
 			min_dst_sq = och::squared_magnitude(p - min_p);
 		}
 
-		if (min_dst_sq <= global_min_dst_sq)
+		if (min_dst_sq <= global_min_dst_sq + 1e-7F)
 		{
 			const och::vec2 deriv = 2.0F * min_t * (p2 - 2.0F * p1 + p0) + 2.0F * (p1 - p0); // 2.0F * (min_t * (p0 - 2.0F * p1 + p2) + p1 - p0);
 
