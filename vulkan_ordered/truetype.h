@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cassert>
 
 #include "och_fio.h"
 
@@ -265,7 +264,7 @@ private:
 
 		const void* data;
 
-		uint32_t get_glyph_id(char32_t cpt) const noexcept;
+		uint32_t map_codept_to_glyph_id(char32_t cpt) const noexcept;
 	};
 
 
@@ -305,9 +304,15 @@ public:
 
 	truetype_file(const char* filename) noexcept;
 
-	glyph_data get_glyph_data(char32_t codepoint) const noexcept;
+	glyph_data get_glyph_data_from_codepoint(char32_t codepoint) const noexcept;
 
-	glyph_metrics get_glyph_metrics(char32_t codepoint) const noexcept;
+	glyph_metrics get_glyph_metrics_from_codept(char32_t codepoint) const noexcept;
+
+	uint32_t get_glyph_id_from_codept(char32_t codepoint) const noexcept;
+
+	glyph_data get_glyph_data_from_id(uint32_t glyph_id) const noexcept;
+
+	glyph_metrics get_glyph_metrics_from_id(uint32_t glyph_id) const noexcept;
 
 	operator bool() const noexcept;
 

@@ -1,6 +1,6 @@
 #include "truetype.h"
 
-
+#include <cassert>
 
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 /*///////////////////////////////////////// Big Endian to Little Endian /////////////////////////////////////////*/
@@ -287,10 +287,23 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 	m_file_type = tentative_file_type;
 }
 
-glyph_data truetype_file::get_glyph_data(char32_t codepoint) const noexcept
+glyph_data truetype_file::get_glyph_data_from_codepoint(char32_t codepoint) const noexcept
 {
-	const uint32_t glyph_id = m_codepoint_mapper.get_glyph_id(codepoint);
+	return get_glyph_data_from_id(get_glyph_id_from_codept(codepoint));
+}
 
+glyph_metrics truetype_file::get_glyph_metrics_from_codept(char32_t codepoint) const noexcept
+{
+	return get_glyph_metrics_from_id(get_glyph_id_from_codept(codepoint));
+}
+
+uint32_t truetype_file::get_glyph_id_from_codept(char32_t codepoint) const noexcept
+{
+	return m_codepoint_mapper.map_codept_to_glyph_id(codepoint);
+}
+
+glyph_data truetype_file::get_glyph_data_from_id(uint32_t glyph_id) const noexcept
+{
 	uint32_t metrics_glyph_id = glyph_id; // Only overwritten if there is a USE_MY_METRICS flag in a composite glyph component
 
 	internal_glyph_data glf = get_glyph_data_recursive(glyph_id, metrics_glyph_id);
@@ -298,10 +311,8 @@ glyph_data truetype_file::get_glyph_data(char32_t codepoint) const noexcept
 	return glf.to_glyph_data(internal_get_glyph_metrics(metrics_glyph_id), m_x_min_global, m_y_min_global);
 }
 
-glyph_metrics truetype_file::get_glyph_metrics(char32_t codepoint) const noexcept
+glyph_metrics truetype_file::get_glyph_metrics_from_id(uint32_t glyph_id) const noexcept
 {
-	const uint32_t glyph_id = m_codepoint_mapper.get_glyph_id(codepoint);
-
 	return internal_get_glyph_metrics(glyph_id);
 }
 
@@ -341,9 +352,7 @@ const void* truetype_file::get_table(table_tag tag)
 
 truetype_file::internal_glyph_data truetype_file::get_glyph_data_recursive(uint32_t glyph_id, uint32_t& out_glyph_id_for_metrics_to_use) const noexcept
 {
-	// Bail out if there was some sort of error in the glyph-id mapper. This is e.g. the case for '\0' or '\n' in calibri.
-	if (glyph_id >= m_glyph_cnt)
-		return {};
+	assert(glyph_id < m_glyph_cnt);
 
 	const glyph_header* header = find_glyph(glyph_id);
 
@@ -518,7 +527,7 @@ truetype_file::internal_glyph_data truetype_file::get_glyph_data_recursive(uint3
 
 				arg1 = static_cast<int16_t>(both_args) >> 8;
 
-				arg2 = static_cast<int16_t>(static_cast<int8_t>(both_args)); // Sign extension shenanigans
+				arg2 = static_cast<int16_t>(static_cast<int8_t>(both_args & 0xFF)); // Sign extension shenanigans
 			}
 
 			if (flags & UNSCALED_COMPONENT_OFFSET) // Translate before scaling and rotation
@@ -786,7 +795,9 @@ void truetype_file::internal_glyph_data::create(uint32_t point_cnt_, uint32_t co
 
 	contour_cnt = contour_cnt_;
 
-	m_points = static_cast<och::vec2*>(malloc(point_cnt_ * sizeof(och::vec2) + contour_cnt_ * sizeof(uint32_t) + (point_cnt_ + 7) / 8));
+	const size_t alloc_size = point_cnt_ * sizeof(och::vec2) + contour_cnt_ * sizeof(uint32_t) + (point_cnt_ + 7) / 8;
+
+	m_points = static_cast<och::vec2*>(malloc(alloc_size)); 
 }
 
 void truetype_file::internal_glyph_data::destroy() noexcept
@@ -832,7 +843,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 
 	// Allocate necessary storage
 
-	och::vec2* final_points = static_cast<och::vec2*>(malloc(final_point_cnt * sizeof(och::vec2) + final_contour_cnt * sizeof(uint32_t)));
+	const size_t alloc_size = final_point_cnt * sizeof(och::vec2) + final_contour_cnt * sizeof(uint32_t);
+
+	och::vec2* final_points = static_cast<och::vec2*>(malloc(alloc_size));
 
 	uint32_t* final_contour_ends = reinterpret_cast<uint32_t*>(final_points + final_point_cnt);
 
@@ -842,7 +855,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 	{
 		const och::vec2 offset(-global_x_min, -global_y_min);
 
-		uint32_t curr_idx = 0;
+		uint32_t curr_point_idx = 0;
+
+		uint32_t curr_contour_idx = 0;
 
 		uint32_t beg = 0;
 
@@ -855,9 +870,9 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 				if (!is_on_line(beg))
 				{
 					if (!is_on_line(end - 1))
-						final_points[curr_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
+						final_points[curr_point_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
 					else
-						final_points[curr_idx++] = points()[end - 1] + offset;
+						final_points[curr_point_idx++] = points()[end - 1] + offset;
 				}
 
 				bool prev_on_line = !is_on_line(beg);
@@ -867,25 +882,25 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 					bool curr_on_line = is_on_line(j);
 
 					if (prev_on_line == curr_on_line)
-						final_points[curr_idx++] = (points()[j - 1] + points()[j]) * 0.5F + offset;
+						final_points[curr_point_idx++] = (points()[j - 1] + points()[j]) * 0.5F + offset;
 
-					final_points[curr_idx++] = points()[j] + offset;
+					final_points[curr_point_idx++] = points()[j] + offset;
 
 					prev_on_line = curr_on_line;
 				}
 
 				if (is_on_line(end - 2) == is_on_line(end - 1))
-					final_points[curr_idx++] = (points()[end - 2] + points()[end - 1]) * 0.5F + offset;
+					final_points[curr_point_idx++] = (points()[end - 2] + points()[end - 1]) * 0.5F + offset;
 
 				if (!(!is_on_line(beg) && is_on_line(end - 1)))
 				{
-					final_points[curr_idx++] = points()[end - 1] + offset;
+					final_points[curr_point_idx++] = points()[end - 1] + offset;
 
 					if (is_on_line(end - 1))
-						final_points[curr_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
+						final_points[curr_point_idx++] = (points()[end - 1] + points()[beg]) * 0.5F + offset;
 				}
 
-				final_contour_ends[i] = curr_idx;
+				final_contour_ends[curr_contour_idx++] = curr_point_idx;
 			}
 
 			beg = end;
@@ -925,7 +940,7 @@ void truetype_file::internal_glyph_data::transform(float xx, float xy, float yx,
 
 /*///////////////////////////////////// truetype_file::codepoint_mapper_data ////////////////////////////////////*/
 
-uint32_t truetype_file::codepoint_mapper_data::get_glyph_id(char32_t cpt) const noexcept
+uint32_t truetype_file::codepoint_mapper_data::map_codept_to_glyph_id(char32_t cpt) const noexcept
 {
 	return mapper(data, static_cast<uint32_t>(cpt));
 }
