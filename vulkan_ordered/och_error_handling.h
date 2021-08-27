@@ -56,5 +56,5 @@ namespace och
 
 #define MAKE_ERROR(macro_num) och::err_info(static_cast<uint64_t>(macro_num), och::error_context{__FILE__, __FUNCTION__, #macro_num, CONSTEXPR_LINE_NUM})
 
-#define MSG_ERROR(macro_msg) och::err_info(1ull, och::error_context(__FILE__, __FUNCTION__, macro_msg, CONSTEXPR_LINE_NUM));
+#define MSG_ERROR(macro_msg) och::err_info(1ull, och::error_context(__FILE__, __FUNCTION__, macro_msg, CONSTEXPR_LINE_NUM))
 }
