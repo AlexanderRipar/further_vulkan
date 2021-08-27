@@ -155,6 +155,9 @@
     <ClInclude Include="sdf_glyph_atlas.h">
       <Filter>extend_io</Filter>
     </ClInclude>
+    <ClInclude Include="image_view.h">
+      <Filter>extend_io</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\msvc_compile_shaders.bat">

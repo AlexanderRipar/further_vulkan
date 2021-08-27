@@ -22,6 +22,8 @@
 
 #include "truetype.h"
 
+#include "sdf_glyph_atlas.h"
+
 enum class sample_type
 {
 	none,
@@ -33,41 +35,6 @@ enum class sample_type
 	sdf_font,
 };
 
-och::err_info image_testing() noexcept
-{
-	binary_image bin_img;
-
-	check(bin_img.load_bmp("textures/sdf_src.bmp", [](texel_b8g8r8 col) noexcept { return col.r > 40; }));
-
-	sdf_image sdf_img;
-
-	check(sdf_img.from_bim(bin_img));
-
-	check(sdf_img.save_bmp("textures/sdf_dst.bmp", true));
-
-	return {};
-}
-
-void write_glyph_info(const truetype_file& file, uint32_t codept, och::stringview font_name, bool& has_erred_before)
-{
-	glyph_data glyph = file.get_glyph_data(codept);
-
-	if (!has_erred_before)
-	{
-		has_erred_before = true;
-
-		och::print("\n\nFont: {}\n\n", font_name);
-	}
-
-	och::print(
-		"0x{:4>~0X}: advance_width: {}; left_side_bearing: {}; contours : {}; points : {}\n",
-		codept,
-		glyph.metrics().advance_width(),
-		glyph.metrics().left_side_bearing(),
-		glyph.contour_cnt(),
-		glyph.point_cnt());
-}
-
 och::err_info font_testing() noexcept
 {
 	truetype_file ttf("C:/Windows/Fonts/consola.ttf");
@@ -75,45 +42,39 @@ och::err_info font_testing() noexcept
 	if (!ttf)
 		return MSG_ERROR("Could not open ttf file");
 
-	glyph_data glyph = ttf.get_glyph_data(U'Җ'); // 0x01DF (ǟ)
+	codept_range ranges[1]{ {0, 128} }; // { {32, 95} };
 
-	constexpr uint32_t sdf_size = 512;
+	glyph_atlas atlas;
 
-	sdf_image sdf;
+	constexpr float clamp = 0.015625F * 2.0F * 2.0F;
 
-	check(sdf.from_glyph(glyph, sdf_size, sdf_size));
+	check(atlas.create("C:/Windows/Fonts/consola.ttf", 128.0F, 0, clamp, 512, och::range(ranges)));
+	
+	check(atlas.save_bmp("textures/atlas.bmp", true));
+	
+	atlas.destroy();
 
-	sdf.save_bmp("textures/glyph_sdf.bmp", true, sdf_image::colour_mapper::nonlinear_distance);
-
-	//bitmap_file sdf_bmp("textures/glyph_sdf.bmp", och::fio::open_normal);
+	//glyph_data glyph = ttf.get_glyph_data_from_id(165); // 165 -> { 131, 333, 319 }
 	//
-	//if (!sdf_bmp)
-	//	return MSG_ERROR("Could not open sdf-bitmap for drawing outline-points");
+	//sdf_image img;
 	//
+	//check(img.from_glyph(glyph, 64, 64));
 	//
-	//for (uint32_t i = 0; i != glyph.contour_cnt(); ++i)
-	//{
-	//	const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
-	//
-	//	och::print("\n       Contour {}:\n", i);
-	//
-	//	for (uint32_t j = beg; j != end; ++j)
-	//	{
-	//		const och::vec2 p = glyph[j];
-	//
-	//		och::print("{:3>} ({:3>}):   ({}, {})\n", j - beg, j, p.x, p.y);
-	//
-	//		const texel_b8g8r8 c = ((j - beg) & 1) ? col::b8g8r8::black : col::b8g8r8::white;
-	//
-	//		sdf_bmp(static_cast<uint32_t>(p.x * sdf_size), static_cast<uint32_t>(p.y * sdf_size)) = c;
-	//	}
-	//
-	//	const och::vec2 p = glyph[beg];
-	//
-	//	sdf_bmp(static_cast<uint32_t>(p.x * sdf_size), static_cast<uint32_t>(p.y * sdf_size)) = col::b8g8r8::orange;
-	//}
+	//check(img.save_bmp("textures/glyph.bmp", true, sdf_image::colour_mapper::monochrome));
 
 	return {};
+
+	//glyph_data glyph = ttf.get_glyph_data(U'A'); // 0x01DF (ǟ)
+	//
+	//constexpr uint32_t sdf_size = 32;
+	//
+	//sdf_image sdf;
+	//
+	//check(sdf.from_glyph(glyph, sdf_size, sdf_size));
+	//
+	//sdf.save_bmp("textures/glyph_sdf.bmp", true, sdf_image::colour_mapper::monochrome);
+	//
+	//return {};
 }
 
 och::err_info testing() noexcept
