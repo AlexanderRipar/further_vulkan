@@ -313,6 +313,8 @@ public:
 			}
 		}
 
+		m_image.attach(sdf_buffer.detach());
+
 		// TODO: Take care of mapper-stuff
 
 		return {};
