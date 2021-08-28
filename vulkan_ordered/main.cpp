@@ -46,9 +46,9 @@ och::err_info font_testing() noexcept
 
 	glyph_atlas atlas;
 
-	constexpr float clamp = 0.015625F * 2.0F * 2.0F;
+	constexpr float clamp = 0.015625F * 2.0F;
 
-	check(atlas.create("C:/Windows/Fonts/consola.ttf", 128.0F, 0, clamp, 512, och::range(ranges)));
+	check(atlas.create("C:/Windows/Fonts/consola.ttf", 128.0F, 2, clamp, 512, och::range(ranges)));
 	
 	check(atlas.save_bmp("textures/atlas.bmp", true));
 	

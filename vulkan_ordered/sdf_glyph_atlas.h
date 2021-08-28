@@ -27,13 +27,16 @@ private:
 
 	static constexpr uint32_t MAX_GLYPH_CNT = 1 << 16;
 
-	struct size_helper
+	struct pos_helper
 	{
-		uint32_t x;
-		uint32_t y;
-		uint32_t w;
-		uint32_t h;
+		uint16_t bx;
+		uint16_t by;
+		uint16_t w;
+		uint16_t h;
+		uint16_t fx;
+		uint16_t fy;
 		uint32_t glyph_id;
+		uint32_t codept;
 	};
 
 	struct glyph_location
@@ -43,6 +46,12 @@ private:
 		och::vec2 size;
 
 		float advance_width;
+	};
+
+	struct codept_id_pair
+	{
+		uint32_t codept;
+		uint32_t glyph_id;
 	};
 
 	struct codept_mapper
@@ -112,17 +121,25 @@ public:
 
 		// Get glyph ids
 
-		och::heap_buffer<uint32_t> glyph_ids(codept_cnt + 1);
+		och::heap_buffer<pos_helper> sizes(codept_cnt + 1);
 
-		glyph_ids[0] = 0;
+		sizes[0].glyph_id = 0;
+
+		sizes[0].codept = 0;
 
 		uint32_t curr_id_idx = 1;
 
 		for (auto& r : codept_ranges)
 			for (uint32_t cp = r.beg; cp != r.beg + r.cnt; ++cp)
-				glyph_ids[curr_id_idx++] = file.get_glyph_id_from_codept(cp);
+			{
+				sizes[curr_id_idx].glyph_id = file.get_glyph_id_from_codept(cp);
 
-		sort_by_id(glyph_ids);
+				sizes[curr_id_idx].codept = cp;
+
+				++curr_id_idx;
+			}
+
+		sort<offsetof(pos_helper, glyph_id), sizeof(pos_helper::glyph_id)>(sizes);
 
 		// Dedupe ids
 		{
@@ -130,62 +147,65 @@ public:
 
 			uint32_t prev_id = ~0u;
 
-			for (uint32_t i = 0; i != glyph_ids.size(); ++i)
+			for (uint32_t i = 0; i != sizes.size(); ++i)
 			{
-				uint32_t curr_id = glyph_ids[i];
+				uint32_t curr_id = sizes[i].glyph_id;
 
 				if (curr_id != prev_id)
 				{
-					glyph_ids[unique_id_cnt++] = curr_id;
+					sizes[unique_id_cnt++] = sizes[i];
 
 					prev_id = curr_id;
 				}
 			}
 
-			glyph_ids.shrink(unique_id_cnt);
+			sizes.shrink(unique_id_cnt);
 		}
 
 		// Load all necessary glyph sizes by id
 
 		och::heap_buffer<uint8_t> sdf_buffer;
 
-		uint32_t buffer_w = map_width, buffer_h = 0;
-
-		och::heap_buffer<size_helper> glyph_sizes(glyph_ids.size());
+		uint16_t buffer_w = static_cast<uint16_t>(map_width), buffer_h = 0;
 
 		uint32_t curr_glyph_idx = 0;
 
 		const float padding_factor = 1.0F + sdf_clamp * 2.0F;
 
-		for (uint32_t i = 0; i != glyph_sizes.size(); ++i)
+		for (uint32_t i = 0; i != sizes.size(); ++i)
 		{
-			glyph_metrics mtx = file.get_glyph_metrics_from_id(glyph_ids[i]);
+			glyph_metrics mtx = file.get_glyph_metrics_from_id(sizes[i].glyph_id);
 			
-			const uint32_t w = static_cast<uint32_t>(mtx.x_size() * glyph_scale * padding_factor);
+			const uint32_t w = static_cast<uint32_t>(mtx.x_size() * glyph_scale);
 
-			const uint32_t h = static_cast<uint32_t>(mtx.y_size() * glyph_scale * padding_factor);
+			const uint32_t h = static_cast<uint32_t>(mtx.y_size() * glyph_scale);
 
 			if (!w || !h)
 				continue;
 
-			if (w > buffer_w)
-				buffer_w = w;
+			if (w > UINT16_MAX || h > UINT16_MAX)
+				return MSG_ERROR("Glyph side length larger than 2^16 - 1");
 
-			glyph_sizes[curr_glyph_idx++] = { 0, 0, w, h, glyph_ids[i] };
+			if (static_cast<uint16_t>(w) > buffer_w)
+				buffer_w = static_cast<uint16_t>(w);
+
+			sizes[curr_glyph_idx].w = static_cast<uint16_t>(w);
+			sizes[curr_glyph_idx].h = static_cast<uint16_t>(h);
+
+			++curr_glyph_idx;
 		}
 
-		glyph_sizes.shrink(curr_glyph_idx);
+		sizes.shrink(curr_glyph_idx);
 
-		sort_by_size(glyph_sizes);
+		sort<offsetof(pos_helper, w), 4, true>(sizes);
 
 		// Find an arrangement for the given glyph sizes and allocate a correspondingly sized buffer
-		
 		{
-			uint32_t curr_x = 0;
+			uint16_t curr_x = 0;
 			
-			uint32_t curr_y = glyph_sizes[0].h;
+			uint16_t curr_y = sizes[0].h;
 
-			for (auto& s : glyph_sizes)
+			for (auto& s : sizes)
 			{
 				if (curr_x + s.w > buffer_w)
 				{
@@ -196,12 +216,12 @@ public:
 				else
 					curr_x += s.w;
 
-				s.x = curr_x - s.w;
+				s.bx = curr_x - s.w;
 
-				s.y = curr_y - s.h;
+				s.by = curr_y - s.h;
 			}
 
-			buffer_h = och::max(curr_y, 1u);
+			buffer_h = och::max(curr_y, static_cast<uint16_t>(1));
 
 			sdf_buffer.allocate(buffer_w * buffer_h);
 		}
@@ -222,18 +242,18 @@ public:
 
 		uint32_t final_size_idx = 0;
 
-		for (auto& s : glyph_sizes)
+		for (auto& s : sizes)
 		{
 			const glyph_data glyph = file.get_glyph_data_from_id(s.glyph_id);
 
-			image_view sdf_view(sdf_buffer.data(), buffer_w, s.x, s.y);
+			image_view sdf_view(sdf_buffer.data(), buffer_w, s.bx, s.by);
 
 			sdf_from_glyph(sdf_view, glyph, s.w, s.h, sdf_mapper);
 
-			uint32_t min_x = ~0u, max_x = 0, min_y = ~0u, max_y = 0;
+			uint16_t min_x = 0xFFFF, max_x = 0, min_y = 0xFFFF, max_y = 0;
 
-			for(uint32_t y = 0; y != s.h; ++y)
-				for (uint32_t x = 0; x != s.w; ++x)
+			for(uint16_t y = 0; y != s.h; ++y)
+				for (uint16_t x = 0; x != s.w; ++x)
 				{
 					if (sdf_view(x, y) != 0)
 					{
@@ -248,37 +268,34 @@ public:
 					}
 				}
 
-			if (min_x == ~0u && max_x == 0)
+			if (max_x == 0 || min_x == 0xFFFF || max_y == 0 || min_y == 0xFFFF)
 				continue;
 
-			if (max_x - min_x > map_width || max_y - min_y > map_width)
+			if (max_x - min_x > static_cast<uint16_t>(map_width) || max_y - min_y > static_cast<uint16_t>(map_width))
 				return MSG_ERROR("Glyph too large for the given map_width parameter");
 
-			glyph_sizes[final_size_idx].x = min_x;
+			pos_helper& f = sizes[final_size_idx++];
 
-			glyph_sizes[final_size_idx].y = min_y;
-
-			++final_size_idx;
+			f.bx += min_x;
+			f.by += min_y;
+			f.w = max_x - min_x + 1 + 2 * static_cast<uint16_t>(glyph_padding_pixels);
+			f.h = max_y - min_y + 1 + 2 * static_cast<uint16_t>(glyph_padding_pixels);
 		}
 
-		glyph_sizes.shrink(final_size_idx);
+		sizes.shrink(final_size_idx);
 
-		sort_by_size(glyph_sizes);
+		sort<offsetof(pos_helper, w), 4, true>(sizes);
 
 		// Find a new arrangement for the reduced glyph sizes and allocate a correspondingly sized buffer (the final sdf)
 
-		och::heap_buffer<size_helper> final_sizes(glyph_sizes.size());
-
 		{
-			uint32_t curr_x = 0;
+			uint16_t curr_x = 0;
 
-			uint32_t curr_y = glyph_sizes[0].h;
+			uint16_t curr_y = sizes[0].h;
 
-			for (uint32_t i = 0; i != glyph_sizes.size(); ++i)
+			for (auto& s : sizes)
 			{
-				const size_helper& s = glyph_sizes[i];
-
-				if (curr_x + s.w > map_width)
+				if (curr_x + s.w > static_cast<uint16_t>(map_width))
 				{
 					curr_y += s.h;
 
@@ -286,34 +303,30 @@ public:
 				}
 				else
 					curr_x += s.w;
+				
+				s.fx = curr_x - s.w;
 
-				final_sizes[i] = { curr_x - s.w, curr_y - s.h, s.w, s.h, s.glyph_id };
+				s.fy = curr_y - s.h;
 			}
 
-			m_height = och::max(curr_y, 1u);
+			m_height = och::max(curr_y, static_cast<uint16_t>(1));
 
 			m_width = map_width;
 
 			m_image.allocate(m_width * m_height);
 
-			memset(m_image.data(), 0x7F, m_width* m_height);
+			memset(m_image.data(), 0x00, m_width * m_height);
 		}
 
 		// copy from buffer to final image.
-		{
-			for (uint32_t i = 0; i != glyph_sizes.size(); ++i)
-			{
-				const size_helper& b = glyph_sizes[i];
+		for (auto& s : sizes)
+			for (uint32_t y = 0; y != s.h - 2 * glyph_padding_pixels; ++y)
+				for (uint32_t x = 0; x != s.w - 2 * glyph_padding_pixels; ++x)
+				{
+					const uint8_t dst = sdf_buffer[x + s.bx + (y + s.by) * buffer_w];
 
-				const size_helper& f = final_sizes[i];
-
-				for(uint32_t y = 0; y != b.h; ++y)
-					for (uint32_t x = 0; x != b.w; ++x)
-						m_image[x + f.x + (y + f.y) * map_width] = sdf_buffer[x + b.x + (y + b.y) * buffer_w];
-			}
-		}
-
-		m_image.attach(sdf_buffer.detach());
+					m_image[x + s.fx + glyph_padding_pixels + (glyph_padding_pixels + y + s.fy) * map_width] = dst;
+				}
 
 		// TODO: Take care of mapper-stuff
 
@@ -345,19 +358,38 @@ public:
 
 private:
 
-	static void sort_by_id(och::heap_buffer<uint32_t>& glyph_ids) noexcept
+	template<uint32_t offset, uint32_t bytes, bool reverse = false, typename T>
+	static void sort(och::heap_buffer<T>& input)
 	{
-		och::heap_buffer<uint32_t> swap_buffer(glyph_ids.size());
+		static_assert(offset + bytes < sizeof(T));
 
+		const uint32_t sz = input.size();
+
+		och::heap_buffer<T> swap_buffer(sz);
+
+		for (uint32_t b = 0; b != bytes; ++b)
 		{
-			uint32_t id_cnts_0[256]{};
+			T* curr = (b & 1) ? swap_buffer.data() : input.data();
 
-			for (auto& id : glyph_ids)
-				++id_cnts_0[id & 0xFF];
+			T* buf = (b & 1) ? input.data() : swap_buffer.data();
+
+			uint8_t* cb = reinterpret_cast<uint8_t*>(curr) + offset + b;
+
+			uint32_t cnts[256]{};
+
+			for (uint32_t i = 0; i != sz; ++i)
+			{
+				if constexpr (reverse)
+					++cnts[255 - *cb];
+				else
+					++cnts[*cb];
+
+				cb += sizeof(T);
+			}
 
 			uint32_t prev_sum = 0;
 
-			for (auto& cnt : id_cnts_0)
+			for (uint32_t& cnt : cnts)
 			{
 				uint32_t tmp = cnt;
 
@@ -366,190 +398,20 @@ private:
 				prev_sum += tmp;
 			}
 
-			for (auto& id : glyph_ids)
-				swap_buffer[id_cnts_0[id & 0xFF]++] = id;
-		}
+			cb = reinterpret_cast<uint8_t*>(curr) + offset + b;
 
-		{
-			uint32_t id_cnts_1[256]{};
-
-			for (auto& id : swap_buffer)
-				++id_cnts_1[(id >> 8) & 0xFF];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : id_cnts_1)
+			for (uint32_t i = 0; i != sz; ++i)
 			{
-				uint32_t tmp = cnt;
+				if constexpr (reverse)
+					buf[cnts[255 - *cb]++] = curr[i];
+				else
+					buf[cnts[*cb]++] = curr[i];
 
-				cnt = prev_sum;
-
-				prev_sum += tmp;
+				cb += sizeof(T);
 			}
-
-			for (auto& id : swap_buffer)
-				glyph_ids[id_cnts_1[(id >> 8) & 0xFF]++] = id;
 		}
 
-		{
-			uint32_t id_cnts_2[256]{};
-
-			for (auto& id : glyph_ids)
-				++id_cnts_2[(id >> 16) & 0xFF];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : id_cnts_2)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& id : glyph_ids)
-				swap_buffer[id_cnts_2[(id >> 16) & 0xFF]++] = id;
-		}
-
-		glyph_ids.attach(swap_buffer.detach());
-	}
-
-	static void sort_by_id(och::heap_buffer<size_helper>& glyph_sizes) noexcept
-	{
-		och::heap_buffer<size_helper> swap_buffer(glyph_sizes.size());
-
-		{
-			uint32_t id_cnts_0[256]{};
-
-			for (auto& sz : glyph_sizes)
-				++id_cnts_0[sz.glyph_id & 0xFF];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : id_cnts_0)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& sz : glyph_sizes)
-				swap_buffer[id_cnts_0[sz.glyph_id & 0xFF]++] = sz;
-		}
-
-		{
-			uint32_t id_cnts_1[256]{};
-
-			for (auto& sz : swap_buffer)
-				++id_cnts_1[(sz.glyph_id >> 8) & 0xFF];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : id_cnts_1)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& sz : swap_buffer)
-				glyph_sizes[id_cnts_1[(sz.glyph_id >> 8) & 0xFF]++] = sz;
-		}
-
-		{
-			uint32_t id_cnts_2[256]{};
-
-			for (auto& sz : glyph_sizes)
-				++id_cnts_2[(sz.glyph_id >> 16) & 0xFF];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : id_cnts_2)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& sz : glyph_sizes)
-				swap_buffer[id_cnts_2[(sz.glyph_id >> 16) & 0xFF]++] = sz;
-		}
-
-		glyph_sizes.attach(swap_buffer.detach());
-	}
-
-	static void sort_by_size(och::heap_buffer<size_helper>& glyph_sizes) noexcept
-	{
-		och::heap_buffer<size_helper> swap_buffer(glyph_sizes.size());
-
-		{
-			uint32_t x_cnts[MAX_GLYPH_SIZE]{};
-
-			for (auto& s : glyph_sizes)
-				++x_cnts[MAX_GLYPH_SIZE - s.w];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : x_cnts)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& s : glyph_sizes)
-				swap_buffer[x_cnts[MAX_GLYPH_SIZE - s.w]++] = s;
-		}
-
-		{
-			uint32_t y_cnts[MAX_GLYPH_SIZE]{};
-
-			for (auto& s : swap_buffer)
-				++y_cnts[MAX_GLYPH_SIZE - s.h];
-
-			uint32_t prev_sum = 0;
-
-			for (auto& cnt : y_cnts)
-			{
-				uint32_t tmp = cnt;
-
-				cnt = prev_sum;
-
-				prev_sum += tmp;
-			}
-
-			for (auto& s : swap_buffer)
-				glyph_sizes[y_cnts[MAX_GLYPH_SIZE - s.h]++] = s;
-		}
-	}
-
-	static const size_helper& find_by_id(const och::heap_buffer<size_helper>& glyph_sizes, uint32_t glyph_id)
-	{
-		int64_t lo = 0, hi = glyph_sizes.size() - 1;
-
-		while (lo <= hi)
-		{
-			int64_t mid = lo + ((hi - lo) >> 1);
-
-			uint32_t mid_id = glyph_sizes[static_cast<uint32_t>(mid)].glyph_id;
-
-			if (mid_id == glyph_id)
-				return glyph_sizes[static_cast<uint32_t>(mid)];
-			else if (mid_id > glyph_id)
-				hi = mid - 1;
-			else
-				lo = mid + 1;
-		}
-
-		return glyph_sizes[0];
+		if constexpr (bytes & 1)
+			input.attach(swap_buffer.detach());
 	}
 };
