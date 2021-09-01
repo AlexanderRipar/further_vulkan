@@ -693,15 +693,15 @@ glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const
 		left_side_bearing = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].left_side_bearing));
 	}
 
-	advance_width *= m_normalization_factor;
-	left_side_bearing *= m_normalization_factor;
+	advance_width = advance_width * m_normalization_factor;
+	left_side_bearing = left_side_bearing * m_normalization_factor - m_y_min_global;
 
 	const glyph_header* header = find_glyph(glyph_id);
 
-	const float x_min = be_to_le(header->x_min) * m_normalization_factor;
-	const float x_max = be_to_le(header->x_max) * m_normalization_factor;
-	const float y_min = be_to_le(header->y_min) * m_normalization_factor;
-	const float y_max = be_to_le(header->y_max) * m_normalization_factor;
+	const float x_min = be_to_le(header->x_min) * m_normalization_factor - m_x_min_global;
+	const float x_max = be_to_le(header->x_max) * m_normalization_factor - m_x_min_global;
+	const float y_min = be_to_le(header->y_min) * m_normalization_factor - m_y_min_global;
+	const float y_max = be_to_le(header->y_max) * m_normalization_factor - m_y_min_global;
 
 	return glyph_metrics(x_min, x_max, y_min, y_max, advance_width, left_side_bearing);
 }
@@ -907,7 +907,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 		}
 	}
 
-	return glyph_data(final_contour_cnt, final_point_cnt, glyph_metrics(0.0F, metrics.x_size(), 0.0F, metrics.y_size(), metrics.advance_width(), metrics.left_side_bearing() - metrics.x_min()), final_points);
+	return glyph_data(final_contour_cnt, final_point_cnt, metrics, final_points);
 }
 
 void truetype_file::internal_glyph_data::translate(float dx, float dy) noexcept
