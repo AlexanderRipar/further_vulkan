@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 
+#include <cassert>
+
 #include "och_error_handling.h"
 
 #include "och_fio.h"
@@ -157,24 +159,32 @@ __forceinline bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec
 }
 
 template<typename Texel, typename Mapper>
-void sdf_from_glyph(image_view<Texel> img, const glyph_data& glyph, uint32_t width, uint32_t height, const Mapper& mapper)
+void sdf_from_glyph(image_view<Texel> img, const glyph_data& glyph, uint32_t pixel_width, uint32_t pixel_height, float glyph_scale, const Mapper& mapper)
 {
-	if (glyph.point_cnt() < 6)
 	{
-		Texel v = mapper(-1.0F);
+		const Texel min_texel = mapper(-1.0F);
 
-		for (uint32_t y = 0; y != height; ++y)
-			for (uint32_t x = 0; x != width; ++x)
-				img(x, y) = v;
+		for (uint32_t y = 0; y != pixel_height; ++y)
+			for (uint32_t x = 0; x != pixel_width; ++x)
+				img(x, y) = min_texel;
+
+		if (glyph.point_cnt() < 6) // Nothing to draw...
+			return;
 	}
 
-	const float inv_width = 1.0F / static_cast<float>(width);
+	const float glf_offset = (1.0F - glyph_scale) * 0.5F;
 
-	const float inv_height = 1.0F / static_cast<float>(height);
+	const float img_step = 1.0F / fmaxf(static_cast<float>(pixel_width), static_cast<float>(pixel_height));
 
-	for (uint32_t y = 0; y != height; ++y)
-		for (uint32_t x = 0; x != width; ++x)
+	const float test = 1.0F * glyph_scale + glf_offset;
+
+	// Start looping over image
+
+	for (uint32_t y = 0; y != pixel_height; ++y)
+		for (uint32_t x = 0; x != pixel_width; ++x)
 		{
+			const och::vec2 p(img_step * static_cast<float>(x), img_step * static_cast<float>(y));
+
 			float min_dst_sq = INFINITY;
 
 			float min_dst_sgn = -1.0F;
@@ -187,17 +197,27 @@ void sdf_from_glyph(image_view<Texel> img, const glyph_data& glyph, uint32_t wid
 			{
 				const uint32_t beg = glyph.contour_beg_index(i), end = glyph.contour_end_index(i);
 
-				const och::vec2 p(static_cast<float>(x) * inv_width, static_cast<float>(y) * inv_height);
-
 				for (uint32_t j = beg; j + 2 < end; j += 2)
 				{
-					const och::vec2 p0 = glyph[j], p1 = glyph[j + 1], p2 = glyph[j + 2];
+					const och::vec2 p0_u = glyph[j];
+					const och::vec2 p0{ p0_u.x * glyph_scale + glf_offset, p0_u.y * glyph_scale + glf_offset };
+					const och::vec2 p1_u = glyph[j + 1];
+					const och::vec2 p1{ p1_u.x * glyph_scale + glf_offset, p1_u.y * glyph_scale + glf_offset };
+					const och::vec2 p2_u = glyph[j + 2];
+					const och::vec2 p2{ p2_u.x * glyph_scale + glf_offset, p2_u.y * glyph_scale + glf_offset };
 
 					if (evaluate_curve_for_pixel(p0, p1, p2, p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
 						min_curve = j;
 				}
 
-				if (evaluate_curve_for_pixel(glyph[end - 2], glyph[end - 1], glyph[beg], p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
+				const och::vec2 p0_u = glyph[end - 2];
+				const och::vec2 p0{ p0_u.x * glyph_scale + glf_offset, p0_u.y * glyph_scale + glf_offset };
+				const och::vec2 p1_u = glyph[end - 1];
+				const och::vec2 p1{ p1_u.x * glyph_scale + glf_offset, p1_u.y * glyph_scale + glf_offset };
+				const och::vec2 p2_u = glyph[beg];
+				const och::vec2 p2{ p2_u.x * glyph_scale + glf_offset, p2_u.y * glyph_scale + glf_offset };
+
+				if (evaluate_curve_for_pixel(p0, p1, p2, p, min_dst_sq, min_dst_sgn, min_dst_max_orthogonality))
 					min_curve = end - 2;
 			}
 
@@ -418,17 +438,17 @@ public:
 		return {};
 	}
 
-	och::err_info from_glyph(const glyph_data& glyph, uint32_t width, uint32_t height) noexcept
+	och::err_info from_glyph(const glyph_data& glyph, uint32_t image_width, uint32_t image_height, float glyph_scale) noexcept
 	{
-		m_width = width;
+		m_width = image_width;
 
-		m_height = height;
+		m_height = image_height;
 
-		m_data = static_cast<float*>(malloc(static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * sizeof(float)));
+		m_data = static_cast<float*>(malloc(static_cast<uint64_t>(image_width) * static_cast<uint64_t>(image_height) * sizeof(float)));
 
-		image_view view(m_data, width, 0, 0);
+		image_view view(m_data, image_width, 0, 0);
 
-		sdf_from_glyph(view, glyph, width, height, [](float dst) noexcept -> float {return dst; });
+		sdf_from_glyph(view, glyph, image_width, image_height, glyph_scale, [](float dst) noexcept -> float {return dst; });
 
 		return {};
 	}
