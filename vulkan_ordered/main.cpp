@@ -38,43 +38,39 @@ enum class sample_type
 och::err_info font_testing() noexcept
 {
 	truetype_file ttf("C:/Windows/Fonts/consola.ttf");
-
+	
 	if (!ttf)
 		return MSG_ERROR("Could not open ttf file");
+	
 
-	codept_range ranges[1]{ {0, 128} }; // { {32, 95} };
 
+	codept_range ranges[1]{ {0, 1024} }; // { {32, 95} };
+	
 	glyph_atlas atlas;
-
+	
 	constexpr float clamp = 0.015625F * 2.0F;
-
-	check(atlas.create("C:/Windows/Fonts/consola.ttf", 128.0F, 2, clamp, 512, och::range(ranges)));
+	
+	check(atlas.create("C:/Windows/Fonts/consola.ttf", 128, 2, clamp, 1024, och::range(ranges)));
 	
 	check(atlas.save_bmp("textures/atlas.bmp", true));
 	
 	atlas.destroy();
 
-	//glyph_data glyph = ttf.get_glyph_data_from_id(165); // 165 -> { 131, 333, 319 }
+
+
+	//glyph_data glyph = ttf.get_glyph_data_from_id(591); // 165 -> { 131, 333, 319 }
+	//
+	//glyph_data glyph = ttf.get_glyph_data_from_codepoint(U'A');
 	//
 	//sdf_image img;
 	//
-	//check(img.from_glyph(glyph, 64, 64));
+	//check(img.from_glyph(glyph, 64, 64, 0.75F));
 	//
 	//check(img.save_bmp("textures/glyph.bmp", true, sdf_image::colour_mapper::monochrome));
 
-	return {};
 
-	//glyph_data glyph = ttf.get_glyph_data(U'A'); // 0x01DF (ǟ)
-	//
-	//constexpr uint32_t sdf_size = 32;
-	//
-	//sdf_image sdf;
-	//
-	//check(sdf.from_glyph(glyph, sdf_size, sdf_size));
-	//
-	//sdf.save_bmp("textures/glyph_sdf.bmp", true, sdf_image::colour_mapper::monochrome);
-	//
-	//return {};
+
+	return {};
 }
 
 och::err_info testing() noexcept
