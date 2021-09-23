@@ -4,9 +4,9 @@ namespace och
 {
 	struct error_dump
 	{
-		static constexpr uint32_t max_call_stack_depth = 16;
+		static constexpr uint32_t MAX_CALLSTACK_DEPTH = 16;
 
-		error_context call_stack[max_call_stack_depth];
+		error_context call_stack[MAX_CALLSTACK_DEPTH];
 
 		uint64_t errcode;
 
@@ -38,9 +38,9 @@ namespace och
 
 		__declspec(noinline) void add(const error_context& ctx) noexcept
 		{
-			if (call_stack_depth >= max_call_stack_depth)
+			if (call_stack_depth >= MAX_CALLSTACK_DEPTH)
 			{
-				call_stack_depth = max_call_stack_depth + 1;
+				call_stack_depth = MAX_CALLSTACK_DEPTH + 1;
 
 				return;
 			}
@@ -50,7 +50,7 @@ namespace och
 
 		bool has_overflown() const noexcept
 		{
-			return call_stack_depth == max_call_stack_depth + 1;
+			return call_stack_depth == MAX_CALLSTACK_DEPTH + 1;
 		}
 	};
 
