@@ -5,6 +5,13 @@
 #include "och_fmt.h"
 #include "och_fio.h"
 
+#define NOMINMAX
+#include <Windows.h>
+
+#include <vulkan/vulkan_win32.h>
+
+
+
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
 	user_data; type;
@@ -18,11 +25,22 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverity
 	return VK_FALSE;
 }
 
-void vulkan_context_resize_callback(GLFWwindow* window, int width, int height)
+int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64_t lparam)
 {
-	width, height;
+	och::vulkan_context* ctx = reinterpret_cast<och::vulkan_context*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
-	reinterpret_cast<och::vulkan_context*>(glfwGetWindowUserPointer(window))->m_flags.framebuffer_resized = true;
+	switch (msg)
+	{
+	case WM_SIZE:
+		ctx->m_swapchain_extent = { LOWORD(lparam), HIWORD(lparam) };
+		ctx->m_flags.framebuffer_resized = true;
+		return 0;
+
+	default:
+		break;
+	}
+
+	return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
 och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
@@ -30,23 +48,73 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
 		return MSG_ERROR("Too many queues requested");
 
+
+
+	HINSTANCE instance = GetModuleHandleW(nullptr);
+	
+	if (!instance)
+		return MSG_ERROR("Could not acquire instance handle");
+
+
+
 	// Create window
 	{
-		glfwInit();
+		constexpr uint32_t MAX_WINDOW_NAME_CUNITS = 512;
+		
+		wchar_t app_name_wide_buffer[MAX_WINDOW_NAME_CUNITS];
+		
+		const wchar_t* app_name_wide = app_name_wide_buffer;
 
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		if (!MultiByteToWideChar(65001, 0, app_name, -1, app_name_wide_buffer, static_cast<int>(MAX_WINDOW_NAME_CUNITS)))
+			if(int mb_to_wc_errorcode = GetLastError(); mb_to_wc_errorcode == ERROR_INSUFFICIENT_BUFFER)
+				app_name_wide = L"???";
+			else
+				return MSG_ERROR("Could not convert window name to UTF-16");
+		
+		WNDCLASSEXW window_class{};
+		window_class.cbSize = sizeof(WNDCLASSEXW);
+		window_class.style = 0;
+		window_class.lpfnWndProc = vulkan_context_window_fn;
+		window_class.cbClsExtra = 0;
+		window_class.cbWndExtra = 0;
+		window_class.hInstance = instance;
+		window_class.hIcon = nullptr;
+		window_class.hCursor = nullptr;
+		window_class.hbrBackground = nullptr;
+		window_class.lpszMenuName = nullptr;
+		window_class.lpszClassName = window_class_name;
+		window_class.hIconSm = nullptr;
+		
+		if (!RegisterClassExW(&window_class))
+			return MSG_ERROR("Could not register window class");
+		
+		const uint32_t window_style = WS_OVERLAPPEDWINDOW;
+		const uint32_t window_ex_style = 0;
+		
+		RECT rect;
+		rect.left = 0;
+		rect.right = window_width;
+		rect.top = 0;
+		rect.bottom = window_height;
+		
+		if (!AdjustWindowRectEx(&rect, window_style, 0, window_ex_style))
+			return MSG_ERROR("Could not adjust window rectangle for decorations");
+		
+		m_hwnd = CreateWindowExW(window_ex_style, window_class_name, app_name_wide, window_style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
+		
+		if (!m_hwnd)
+			return MSG_ERROR("Could not create window");
+		
+		SetLastError(0);
+		
+		SetWindowLongPtrW(static_cast<HWND>(m_hwnd), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+		
+		if (GetLastError())
+			return MSG_ERROR("Failed to set custom window data");
 
-		m_window = glfwCreateWindow(window_width, window_height, app_name, nullptr, nullptr);
-
-		glfwSetWindowUserPointer(m_window, this);
-
-		glfwSetFramebufferSizeCallback(m_window, vulkan_context_resize_callback);
-
-		uint32_t glfw_extension_cnt;
-
-		const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_cnt);
-
-		check(s_feats.add_instance_extensions(glfw_extensions, glfw_extension_cnt));
+		ShowWindow(static_cast<HWND>(m_hwnd), SW_NORMAL);
+		
+		m_swapchain_extent = { window_width, window_height };
 	}
 
 	// Fill debug messenger creation info
@@ -102,9 +170,16 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 
 	// Create surface
 	{
-		check(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface));
+		VkWin32SurfaceCreateInfoKHR surface_ci{};
+		surface_ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+		surface_ci.pNext = nullptr;
+		surface_ci.flags = 0;
+		surface_ci.hinstance = instance;
+		surface_ci.hwnd = static_cast<HWND>(m_hwnd);
+		
+		check(vkCreateWin32SurfaceKHR(m_instance, &surface_ci, nullptr, &m_surface));
 	}
-
+	
 	// Surface Capabilites for use throughout the create() Function
 	VkSurfaceCapabilitiesKHR surface_capabilites;
 
@@ -365,11 +440,8 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 	{
 		if (surface_capabilites.currentExtent.width == ~0u)
 		{
-			uint32_t width, height;
-			glfwGetFramebufferSize(m_window, reinterpret_cast<int*>(&width), reinterpret_cast<int*>(&height));
-
-			m_swapchain_extent.width = och::clamp(width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
-			m_swapchain_extent.height = och::clamp(height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
+			m_swapchain_extent.width = och::clamp(m_swapchain_extent.width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
+			m_swapchain_extent.height = och::clamp(m_swapchain_extent.height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
 		}
 		else
 			m_swapchain_extent = surface_capabilites.currentExtent;
@@ -484,25 +556,17 @@ void och::vulkan_context::destroy() const noexcept
 
 	vkDestroyInstance(m_instance, nullptr);
 
-	glfwDestroyWindow(m_window);
+	DestroyWindow(static_cast<HWND>(m_hwnd));
 
-	glfwTerminate();
+	UnregisterClassW(window_class_name, GetModuleHandleW(nullptr));
 }
 
 och::err_info och::vulkan_context::recreate_swapchain() noexcept
 {
-	// Get current window size
-
-	glfwGetFramebufferSize(m_window, reinterpret_cast<int*>(&m_swapchain_extent.width), reinterpret_cast<int*>(&m_swapchain_extent.height));
-
-	while (!m_swapchain_extent.width || !m_swapchain_extent.height)
-	{
-		glfwWaitEvents();
-
-		glfwGetFramebufferSize(m_window, reinterpret_cast<int*>(&m_swapchain_extent.width), reinterpret_cast<int*>(&m_swapchain_extent.height));
-	}
-
 	check(vkDeviceWaitIdle(m_device));
+
+	if (!m_swapchain_extent.width || !m_swapchain_extent.height)
+		return {};
 
 	// Get surface capabilities for current pre-transform
 
@@ -654,4 +718,21 @@ och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer comman
 	}
 
 	return {};
+}
+
+bool och::vulkan_context::process_messages() noexcept
+{
+	MSG msg;
+
+	while (PeekMessageW(&msg, static_cast<HWND>(m_hwnd), 0, 0, PM_REMOVE))
+	{
+		if (msg.message == WM_QUIT)
+			return false;
+
+		TranslateMessage(&msg);
+
+		DispatchMessageW(&msg);
+	}
+
+	return true;
 }

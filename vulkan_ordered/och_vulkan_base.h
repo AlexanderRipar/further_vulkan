@@ -2,7 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include <GLFW/glfw3.h>
+//#include <GLFW/glfw3.h>
 
 #include "och_error_handling.h"
 #include "och_heap_buffer.h"
@@ -16,8 +16,10 @@ namespace och
 
 		const char* m_inst_extensions[max_cnt]{
 	#ifdef OCH_VALIDATE
-				"VK_EXT_debug_utils"
+				"VK_EXT_debug_utils",
 	#endif // OCH_VALIDATE
+				"VK_KHR_surface",
+				"VK_KHR_win32_surface",
 		};
 
 		const char* m_inst_layers[max_cnt]
@@ -28,11 +30,11 @@ namespace och
 		};
 
 #ifdef OCH_VALIDATE
-		uint32_t m_inst_extension_cnt = 1;
+		uint32_t m_inst_extension_cnt = 3;
 
 		uint32_t m_inst_layer_cnt = 1;
 #else
-		uint32_t instance_extension_cnt = 0;
+		uint32_t instance_extension_cnt = 2;
 
 		uint32_t instance_layer_cnt = 0;
 #endif // OCH_VALIDATE
@@ -227,9 +229,10 @@ namespace och
 	{
 		static inline required_feature_list s_feats;
 
+		static inline const wchar_t* window_class_name = L"och_vulkan_context_window_class";
+
 		static constexpr uint32_t MAX_SWAPCHAIN_IMAGE_CNT = 4;
-
-
+		
 
 		struct
 		{
@@ -251,7 +254,11 @@ namespace och
 		VkPhysicalDeviceMemoryProperties m_memory_properties{};
 
 
-		GLFWwindow* m_window{};
+
+		void* m_hwnd{};
+
+
+		//GLFWwindow* m_window{};
 
 		VkInstance m_instance{};
 
@@ -298,5 +305,7 @@ namespace och
 		err_info begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept;
 
 		err_info submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
+
+		bool process_messages() noexcept;
 	};
 }
