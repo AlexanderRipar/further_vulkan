@@ -156,11 +156,9 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 
 				if (och::contains_all(flags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) && supports_present)
 					general_queue_index = f;
-				else if (och::contains_all(flags, VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) &&
-					och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT))
+				else if (och::contains_all(flags, VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) && och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT))
 					compute_queue_index = f;
-				else if (och::contains_all(flags, VK_QUEUE_TRANSFER_BIT) &&
-					och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+				else if (och::contains_all(flags, VK_QUEUE_TRANSFER_BIT) && och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
 					transfer_queue_index = f;
 			}
 
@@ -584,13 +582,19 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	return {};
 }
 
-uint32_t och::vulkan_context:: suitable_memory_type_idx(uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept
+och::err_info och::vulkan_context::suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept
 {
 	for (uint32_t i = 0; i != m_memory_properties.memoryTypeCount; ++i)
 		if ((memory_type_mask & (1 << i)) && och::contains_all(m_memory_properties.memoryTypes[i].propertyFlags, property_flags))
-			return i;
+		{
+			out_memory_type_idx = i;
 
-	return ~0u;
+			return {};
+		}
+
+	out_memory_type_idx = 0;
+
+	return MSG_ERROR("Could not find suitable memory type index");
 }
 
 och::err_info och::vulkan_context::load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept
@@ -608,6 +612,46 @@ och::err_info och::vulkan_context::load_shader_module_file(VkShaderModule& out_s
 	module_ci.pCode = shader_file.data();
 
 	check(vkCreateShaderModule(m_device, &module_ci, nullptr, &out_shader_module));
+
+	return {};
+}
+
+och::err_info och::vulkan_context::begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept
+{
+	VkCommandBufferAllocateInfo alloc_info{};
+	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandBufferCount = 1;
+	alloc_info.commandPool = command_pool;
+
+	check(vkAllocateCommandBuffers(m_device, &alloc_info, &out_command_buffer));
+
+	VkCommandBufferBeginInfo beg_info{};
+	beg_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beg_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	check(vkBeginCommandBuffer(out_command_buffer, &beg_info));
+
+	return {};
+}
+
+och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free) const noexcept
+{
+	check(vkEndCommandBuffer(command_buffer));
+
+	VkSubmitInfo submit_info{};
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.commandBufferCount = 1;
+	submit_info.pCommandBuffers = &command_buffer;
+
+	check(vkQueueSubmit(submit_queue, 1, &submit_info, nullptr));
+
+	if (wait_and_free)
+	{
+		check(vkDeviceWaitIdle(m_device));
+
+		vkFreeCommandBuffers(m_device, command_pool, 1, &command_buffer);
+	}
 
 	return {};
 }

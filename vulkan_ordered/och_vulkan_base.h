@@ -291,8 +291,12 @@ namespace och
 
 		err_info recreate_swapchain() noexcept;
 
-		uint32_t suitable_memory_type_idx(uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept;
+		err_info suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept;
 
 		err_info load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept;
+
+		err_info begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept;
+
+		err_info submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
 	};
 }
