@@ -32,9 +32,18 @@ int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64
 	switch (msg)
 	{
 	case WM_SIZE:
-		ctx->m_swapchain_extent = { LOWORD(lparam), HIWORD(lparam) };
-		ctx->m_flags.framebuffer_resized = true;
+		ctx->m_swapchain_extent.store({ LOWORD(lparam), HIWORD(lparam) }, std::memory_order::release);
+		ctx->m_flags.framebuffer_resized.store(true, std::memory_order::release);
 		return 0;
+
+	case WM_QUIT:
+		PostQuitMessage(0);
+		ctx->m_flags.is_window_closed.store(true, std::memory_order::release);
+		break;
+
+	case WM_CLOSE:
+		ctx->m_flags.is_window_closed.store(true, std::memory_order::release);
+		break;
 
 	default:
 		break;
@@ -43,34 +52,33 @@ int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64
 	return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
+
+
+DWORD message_pump_thread_fn(void* data)
 {
-	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
-		return MSG_ERROR("Too many queues requested");
-
-
-
-	HINSTANCE instance = GetModuleHandleW(nullptr);
-	
-	if (!instance)
-		return MSG_ERROR("Could not acquire instance handle");
+	och::vulkan_context* ctx = static_cast<och::vulkan_context*>(data);
 
 
 
 	// Create window
 	{
 		constexpr uint32_t MAX_WINDOW_NAME_CUNITS = 512;
-		
+
 		wchar_t app_name_wide_buffer[MAX_WINDOW_NAME_CUNITS];
-		
+
 		const wchar_t* app_name_wide = app_name_wide_buffer;
 
-		if (!MultiByteToWideChar(65001, 0, app_name, -1, app_name_wide_buffer, static_cast<int>(MAX_WINDOW_NAME_CUNITS)))
-			if(int mb_to_wc_errorcode = GetLastError(); mb_to_wc_errorcode == ERROR_INSUFFICIENT_BUFFER)
+		if (!MultiByteToWideChar(65001, 0, ctx->m_app_name, -1, app_name_wide_buffer, static_cast<int>(MAX_WINDOW_NAME_CUNITS)))
+			if (int mb_to_wc_errorcode = GetLastError(); mb_to_wc_errorcode == ERROR_INSUFFICIENT_BUFFER)
 				app_name_wide = L"???";
 			else
-				return MSG_ERROR("Could not convert window name to UTF-16");
-		
+				return 0x101;
+
+		HINSTANCE instance = GetModuleHandleW(nullptr);
+
+		if (!instance)
+			return 0x100;
+
 		WNDCLASSEXW window_class{};
 		window_class.cbSize = sizeof(WNDCLASSEXW);
 		window_class.style = 0;
@@ -82,39 +90,195 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		window_class.hCursor = nullptr;
 		window_class.hbrBackground = nullptr;
 		window_class.lpszMenuName = nullptr;
-		window_class.lpszClassName = window_class_name;
+		window_class.lpszClassName = och::vulkan_context::WINDOW_CLASS_NAME;
 		window_class.hIconSm = nullptr;
-		
+
 		if (!RegisterClassExW(&window_class))
-			return MSG_ERROR("Could not register window class");
-		
+			return 0x102;
+
 		const uint32_t window_style = WS_OVERLAPPEDWINDOW;
 		const uint32_t window_ex_style = 0;
-		
+
+		VkExtent2D loaded_swapchain_extent = ctx->m_swapchain_extent.load(std::memory_order::acquire);
+
 		RECT rect;
 		rect.left = 0;
-		rect.right = window_width;
+		rect.right = loaded_swapchain_extent.width;
 		rect.top = 0;
-		rect.bottom = window_height;
-		
+		rect.bottom = loaded_swapchain_extent.height;
 		if (!AdjustWindowRectEx(&rect, window_style, 0, window_ex_style))
-			return MSG_ERROR("Could not adjust window rectangle for decorations");
-		
-		m_hwnd = CreateWindowExW(window_ex_style, window_class_name, app_name_wide, window_style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
-		
-		if (!m_hwnd)
-			return MSG_ERROR("Could not create window");
-		
-		SetLastError(0);
-		
-		SetWindowLongPtrW(static_cast<HWND>(m_hwnd), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
-		
-		if (GetLastError())
-			return MSG_ERROR("Failed to set custom window data");
+			return 0x103;
 
-		ShowWindow(static_cast<HWND>(m_hwnd), SW_NORMAL);
-		
-		m_swapchain_extent = { window_width, window_height };
+		HWND hwnd = CreateWindowExW(window_ex_style, och::vulkan_context::WINDOW_CLASS_NAME, app_name_wide, window_style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
+
+		if (!hwnd)
+			return 0x104;
+		else
+			ctx->m_hwnd = static_cast<void*>(hwnd);
+
+		SetLastError(0);
+
+		SetWindowLongPtrW(static_cast<HWND>(hwnd), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
+
+		if (GetLastError())
+			return 0x105;
+
+		if (!SetEvent(ctx->m_message_pump_initialization_wait_event))
+			return 0x106;
+	}
+
+	// Wait for continuation signal from main thread
+	
+	if (WaitForSingleObject(ctx->m_message_pump_start_wait_event, INFINITE))
+		return 0x107;
+
+	ShowWindow(static_cast<HWND>(ctx->m_hwnd), SW_NORMAL);
+
+	// Start pumping messages
+
+	MSG msg;
+
+	BOOL result;
+
+	for (result = GetMessageW(&msg, static_cast<HWND>(ctx->m_hwnd), 0, 0); result != 0 && result != -1; result = GetMessageW(&msg, static_cast<HWND>(ctx->m_hwnd), 0, 0))
+	{
+		if (msg.message == och::vulkan_context::MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE)
+			return 1;
+
+		TranslateMessage(&msg);
+
+		DispatchMessageW(&msg);
+	}
+
+	return result;
+}
+
+
+
+och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
+{
+	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
+		return MSG_ERROR("Too many queues requested");
+
+	m_app_name = app_name;
+
+
+
+	// Create window
+	{
+		// constexpr uint32_t MAX_WINDOW_NAME_CUNITS = 512;
+		// 
+		// wchar_t app_name_wide_buffer[MAX_WINDOW_NAME_CUNITS];
+		// 
+		// const wchar_t* app_name_wide = app_name_wide_buffer;
+		// 
+		// if (!MultiByteToWideChar(65001, 0, app_name, -1, app_name_wide_buffer, static_cast<int>(MAX_WINDOW_NAME_CUNITS)))
+		// 	if(int mb_to_wc_errorcode = GetLastError(); mb_to_wc_errorcode == ERROR_INSUFFICIENT_BUFFER)
+		// 		app_name_wide = L"???";
+		// 	else
+		// 		return MSG_ERROR("Could not convert window name to UTF-16");
+		// 
+		// WNDCLASSEXW window_class{};
+		// window_class.cbSize = sizeof(WNDCLASSEXW);
+		// window_class.style = 0;
+		// window_class.lpfnWndProc = vulkan_context_window_fn;
+		// window_class.cbClsExtra = 0;
+		// window_class.cbWndExtra = 0;
+		// window_class.hInstance = instance;
+		// window_class.hIcon = nullptr;
+		// window_class.hCursor = nullptr;
+		// window_class.hbrBackground = nullptr;
+		// window_class.lpszMenuName = nullptr;
+		// window_class.lpszClassName = WINDOW_CLASS_NAME;
+		// window_class.hIconSm = nullptr;
+		// 
+		// if (!RegisterClassExW(&window_class))
+		// 	return MSG_ERROR("Could not register window class");
+		// 
+		// const uint32_t window_style = WS_OVERLAPPEDWINDOW;
+		// const uint32_t window_ex_style = 0;
+		// 
+		// RECT rect;
+		// rect.left = 0;
+		// rect.right = window_width;
+		// rect.top = 0;
+		// rect.bottom = window_height;
+		// if (!AdjustWindowRectEx(&rect, window_style, 0, window_ex_style))
+		// 	return MSG_ERROR("Could not adjust window rectangle for decorations");
+		// 
+		// m_hwnd = CreateWindowExW(window_ex_style, WINDOW_CLASS_NAME, app_name_wide, window_style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
+		// 
+		// if (!m_hwnd)
+		// 	return MSG_ERROR("Could not create window");
+		// 
+		// SetLastError(0);
+		// 
+		// SetWindowLongPtrW(static_cast<HWND>(m_hwnd), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+		// 
+		// if (GetLastError())
+		// 	return MSG_ERROR("Failed to set custom window data");
+		// 
+		// ShowWindow(static_cast<HWND>(m_hwnd), SW_NORMAL);
+		// 
+		// m_swapchain_extent = { window_width, window_height };
+	}
+
+	// Create message pump thread
+	{
+		// First off, create an auto-reset event for the thread to indicate it has completed its window creation
+		if (HANDLE wait_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !wait_event)
+			return MSG_ERROR("Failed to create wait event");
+		else
+			m_message_pump_initialization_wait_event = wait_event;
+
+		// Also create an auto-reset event to signal the message pump thread once it should start pumping messages
+		if (HANDLE continue_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !continue_event)
+			return MSG_ERROR("Failed to create wait event");
+		else
+			m_message_pump_start_wait_event = continue_event;
+
+		// Set m_swapchain_extent to the requested window size for the thread to use during window creation
+		m_swapchain_extent.store({ window_width, window_height }, std::memory_order::release);
+
+
+		// Now create the thread
+
+		DWORD thread_id;
+
+		HANDLE thread_handle = CreateThread(nullptr, 4096 * 8, message_pump_thread_fn, static_cast<void*>(this), 0, &thread_id);
+
+		if (!thread_handle)
+		{
+			m_message_pump_thread_handle = nullptr;
+
+			m_message_pump_thread_id = 0;
+
+			return MSG_ERROR("Could not create thread");
+		}
+
+		m_message_pump_thread_handle = thread_handle;
+
+		m_message_pump_thread_id = thread_id;
+
+		if (DWORD wait_result = WaitForSingleObject(m_message_pump_initialization_wait_event, MAX_MESSAGE_PUMP_INITIALIZATION_TIME_MS))
+		{
+			DWORD exit_code;
+
+			BOOL exit_code_result = GetExitCodeThread(thread_handle, &exit_code);
+
+			if (!exit_code_result)
+				if (DWORD last_error = GetLastError(); last_error == STILL_ACTIVE)
+					och::print("Message Pump Thread still active\n");
+				else
+					och::print("Failed to get Message Pump Thread exit code\n");
+			else
+				och::print("Message Pump Thread exited with 0x{:X}\n", static_cast<uint32_t>(exit_code));
+
+			if (wait_result == WAIT_TIMEOUT)
+				return MSG_ERROR("Wait on window creation timed out");
+			else if (wait_result)
+				return MSG_ERROR("Wait on window creation failed");
+		}
 	}
 
 	// Fill debug messenger creation info
@@ -174,7 +338,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		surface_ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		surface_ci.pNext = nullptr;
 		surface_ci.flags = 0;
-		surface_ci.hinstance = instance;
+		surface_ci.hinstance = GetModuleHandleW(nullptr);
 		surface_ci.hwnd = static_cast<HWND>(m_hwnd);
 		
 		check(vkCreateWin32SurfaceKHR(m_instance, &surface_ci, nullptr, &m_surface));
@@ -440,11 +604,15 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 	{
 		if (surface_capabilites.currentExtent.width == ~0u)
 		{
-			m_swapchain_extent.width = och::clamp(m_swapchain_extent.width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
-			m_swapchain_extent.height = och::clamp(m_swapchain_extent.height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
+			VkExtent2D loaded_swapchain_extent = m_swapchain_extent.load(std::memory_order::acquire);
+
+			loaded_swapchain_extent.width = och::clamp(loaded_swapchain_extent.width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
+			loaded_swapchain_extent.height = och::clamp(loaded_swapchain_extent.height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
+
+			m_swapchain_extent.store(loaded_swapchain_extent, std::memory_order::release);
 		}
 		else
-			m_swapchain_extent = surface_capabilites.currentExtent;
+			m_swapchain_extent.store(surface_capabilites.currentExtent, std::memory_order::release);
 	}
 
 	// Create swapchain
@@ -465,7 +633,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		swapchain_ci.minImageCount = requested_img_cnt;
 		swapchain_ci.imageFormat = m_swapchain_format;
 		swapchain_ci.imageColorSpace = m_swapchain_colorspace;
-		swapchain_ci.imageExtent = m_swapchain_extent;
+		swapchain_ci.imageExtent = m_swapchain_extent.load(std::memory_order::acquire);
 		swapchain_ci.imageArrayLayers = 1;
 		swapchain_ci.imageUsage = swapchain_image_usage;
 		swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -558,14 +726,14 @@ void och::vulkan_context::destroy() const noexcept
 
 	DestroyWindow(static_cast<HWND>(m_hwnd));
 
-	UnregisterClassW(window_class_name, GetModuleHandleW(nullptr));
+	UnregisterClassW(WINDOW_CLASS_NAME, GetModuleHandleW(nullptr));
 }
 
 och::err_info och::vulkan_context::recreate_swapchain() noexcept
 {
 	check(vkDeviceWaitIdle(m_device));
 
-	if (!m_swapchain_extent.width || !m_swapchain_extent.height)
+	if (VkExtent2D loaded_swapchain_extent = m_swapchain_extent.load(std::memory_order::acquire); !loaded_swapchain_extent.width || !loaded_swapchain_extent.height)
 		return {};
 
 	// Get surface capabilities for current pre-transform
@@ -583,6 +751,9 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 
 	// Actually recreate swapchain
 
+	VkSurfaceCapabilitiesKHR surface_capabilities{};
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilites);
+
 	VkSwapchainCreateInfoKHR swapchain_ci{};
 	swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchain_ci.pNext = nullptr;
@@ -591,7 +762,7 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	swapchain_ci.minImageCount = m_swapchain_image_cnt;
 	swapchain_ci.imageFormat = m_swapchain_format;
 	swapchain_ci.imageColorSpace = m_swapchain_colorspace;
-	swapchain_ci.imageExtent = m_swapchain_extent;
+	swapchain_ci.imageExtent = surface_capabilites.currentExtent;
 	swapchain_ci.imageArrayLayers = 1;
 	swapchain_ci.imageUsage = m_image_swapchain_usage;
 	swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -600,7 +771,7 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	swapchain_ci.preTransform = surface_capabilites.currentTransform;
 	swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapchain_ci.presentMode = m_swapchain_present_mode;
-	swapchain_ci.clipped = VK_TRUE; // TODO: VK_FALSE?
+	swapchain_ci.clipped = VK_TRUE;
 	swapchain_ci.oldSwapchain = m_swapchain;
 
 	check(vkCreateSwapchainKHR(m_device, &swapchain_ci, nullptr, &tmp_swapchain));
@@ -720,19 +891,25 @@ och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer comman
 	return {};
 }
 
-bool och::vulkan_context::process_messages() noexcept
+bool och::vulkan_context::is_window_closed() const noexcept
 {
-	MSG msg;
+	return m_flags.is_window_closed.load(std::memory_order::acquire);
+}
 
-	while (PeekMessageW(&msg, static_cast<HWND>(m_hwnd), 0, 0, PM_REMOVE))
-	{
-		if (msg.message == WM_QUIT)
-			return false;
+bool och::vulkan_context::is_framebuffer_resized() const noexcept
+{
+	return m_flags.framebuffer_resized.load(std::memory_order::acquire);
+}
 
-		TranslateMessage(&msg);
+och::err_info och::vulkan_context::begin_message_processing() noexcept
+{
+	if (!SetEvent(m_message_pump_start_wait_event))
+		return MSG_ERROR("Failed to signal message pump start event");
 
-		DispatchMessageW(&msg);
-	}
+	return {};
+}
 
-	return true;
+void och::vulkan_context::end_message_processing() noexcept
+{
+	PostMessageW(static_cast<HWND>(m_hwnd), MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE, 0, 0);
 }

@@ -75,7 +75,9 @@ struct simple_compute_buffer_copy
 				VkMemoryRequirements mem_reqs;
 				vkGetBufferMemoryRequirements(context.m_device, src_buffer, &mem_reqs);
 
-				uint32_t memory_type_idx = context.suitable_memory_type_idx(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+				uint32_t memory_type_idx;
+				
+				check(context.suitable_memory_type_idx(memory_type_idx, mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
 
 				src_offset = 0;
 

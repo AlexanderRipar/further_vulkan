@@ -61,6 +61,8 @@ struct compute_image_to_swapchain
 
 	bool is_using_simplex;
 
+
+
 	och::err_info create(bool use_simplex) noexcept
 	{
 		is_using_simplex = use_simplex;
@@ -239,7 +241,9 @@ struct compute_image_to_swapchain
 	
 	och::err_info run() noexcept
 	{
-		while (!glfwWindowShouldClose(context.m_window))
+		check(context.begin_message_processing());
+
+		while (!context.is_window_closed())
 		{
 			check(vkWaitForFences(context.m_device, 1, &frame_inflight_fences[frame_idx], VK_FALSE, UINT64_MAX));
 
@@ -292,9 +296,9 @@ struct compute_image_to_swapchain
 
 			VkResult present_rst = vkQueuePresentKHR(context.m_general_queues[0], &present_info);
 
-			if (present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.m_flags.framebuffer_resized)
+			if (present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.is_framebuffer_resized())
 			{
-				context.m_flags.framebuffer_resized = false;
+				context.m_flags.framebuffer_resized.store(false, std::memory_order::release);
 
 				recreate_swapchain();
 			}
@@ -302,8 +306,6 @@ struct compute_image_to_swapchain
 				check(present_rst);
 
 			frame_idx = (frame_idx + 1) % MAX_FRAMES_INFLIGHT;
-
-			glfwPollEvents();
 		}
 
 		return {};
@@ -391,8 +393,10 @@ struct compute_image_to_swapchain
 
 		vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 
-		uint32_t groups_x = (context.m_swapchain_extent.width + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
-		uint32_t groups_y = (context.m_swapchain_extent.height + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
+		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+
+		uint32_t groups_x = (loaded_swapchain_extent.width + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
+		uint32_t groups_y = (loaded_swapchain_extent.height + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
 
 		vkCmdDispatch(command_buffer, groups_x, groups_y, 1);
 

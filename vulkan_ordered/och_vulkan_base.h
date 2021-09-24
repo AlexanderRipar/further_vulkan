@@ -2,7 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
-//#include <GLFW/glfw3.h>
+#include <atomic>
 
 #include "och_error_handling.h"
 #include "och_heap_buffer.h"
@@ -229,17 +229,24 @@ namespace och
 	{
 		static inline required_feature_list s_feats;
 
-		static inline const wchar_t* window_class_name = L"och_vulkan_context_window_class";
+		static inline const wchar_t* WINDOW_CLASS_NAME = L"och_vulkan_context_window_class";
 
 		static constexpr uint32_t MAX_SWAPCHAIN_IMAGE_CNT = 4;
 		
+		static constexpr uint32_t MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE = 0x419; // WM_USER + 0x19
+
+		static constexpr uint32_t MAX_MESSAGE_PUMP_INITIALIZATION_TIME_MS = 2000;
+
 
 		struct
 		{
-			bool framebuffer_resized : 1;
+			std::atomic<bool> framebuffer_resized;
+			std::atomic<bool> is_window_closed;
 			bool fully_initialized : 1;
 			bool separate_compute_and_general_queue : 1;
 		} m_flags{};
+
+		static_assert(sizeof(m_flags) <= sizeof(uint64_t));
 
 		queue_family_info m_general_queues{};
 
@@ -256,9 +263,6 @@ namespace och
 
 
 		void* m_hwnd{};
-
-
-		//GLFWwindow* m_window{};
 
 		VkInstance m_instance{};
 
@@ -282,7 +286,7 @@ namespace och
 
 		VkImageUsageFlags m_image_swapchain_usage{};
 
-		VkExtent2D m_swapchain_extent{};
+		std::atomic<VkExtent2D> m_swapchain_extent{};
 
 		uint32_t m_swapchain_image_cnt{};
 
@@ -292,11 +296,38 @@ namespace och
 
 
 
+		void* m_message_pump_thread_handle{};
+
+		uint32_t m_message_pump_thread_id{};
+
+		void* m_message_pump_initialization_wait_event{}; // Signaled by the message pump thread once it has created its window
+
+		void* m_message_pump_start_wait_event{}; // Signaled once the main thread once the message pump thread to run
+
+		const char* m_app_name{};
+
+
+
+		uint8_t m_input_head;
+
+		uint8_t m_input_tail;
+
+		uint64_t m_curr_keys[4]{};
+
+		uint64_t m_prev_keys[4]{};
+
+		och::utf8_char m_input_queue[64];
+
+
+
+
 		err_info create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
 
 		void destroy() const noexcept;
 
+
 		err_info recreate_swapchain() noexcept;
+
 
 		err_info suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept;
 
@@ -306,6 +337,14 @@ namespace och
 
 		err_info submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
 
-		bool process_messages() noexcept;
+
+		err_info begin_message_processing() noexcept;
+
+		void end_message_processing() noexcept;
+
+
+		bool is_window_closed() const noexcept;
+
+		bool is_framebuffer_resized() const noexcept;
 	};
 }

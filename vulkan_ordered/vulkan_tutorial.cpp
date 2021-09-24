@@ -375,17 +375,19 @@ struct vulkan_tutorial
 		input_asm_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		input_asm_info.primitiveRestartEnable = VK_FALSE;
 
+		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+
 		VkViewport viewport{};
 		viewport.x = 0.0F;
 		viewport.y = 0.0F;
-		viewport.width = static_cast<float>(context.m_swapchain_extent.width);
-		viewport.height = static_cast<float>(context.m_swapchain_extent.height);
+		viewport.width = static_cast<float>(loaded_swapchain_extent.width);
+		viewport.height = static_cast<float>(loaded_swapchain_extent.height);
 		viewport.minDepth = 0.0F;
 		viewport.maxDepth = 1.0F;
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent = context.m_swapchain_extent;
+		scissor.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
 
 		VkPipelineViewportStateCreateInfo view_info{};
 		view_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -496,7 +498,9 @@ struct vulkan_tutorial
 
 	och::err_info create_vk_depth_resources()
 	{
-		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
+		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+
+		check(allocate_image(loaded_swapchain_extent.width, loaded_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
 
 		check(allocate_image_view(vk_depth_image, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, vk_depth_image_view));
 
@@ -513,13 +517,15 @@ struct vulkan_tutorial
 		{
 			VkImageView attachments[]{ context.m_swapchain_image_views[i], vk_depth_image_view };
 
+			VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+
 			VkFramebufferCreateInfo create_info{};
 			create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 			create_info.renderPass = vk_render_pass;
 			create_info.attachmentCount = static_cast<uint32_t>(sizeof(attachments) / sizeof(*attachments));
 			create_info.pAttachments = attachments;
-			create_info.width = context.m_swapchain_extent.width;
-			create_info.height = context.m_swapchain_extent.height;
+			create_info.width = loaded_swapchain_extent.width;
+			create_info.height = loaded_swapchain_extent.height;
 			create_info.layers = 1;
 
 			check(vkCreateFramebuffer(context.m_device, &create_info, nullptr, &vk_swapchain_framebuffers[i]));
@@ -860,7 +866,7 @@ struct vulkan_tutorial
 			pass_beg_info.renderPass = vk_render_pass;
 			pass_beg_info.framebuffer = vk_swapchain_framebuffers[i];
 			pass_beg_info.renderArea.offset = { 0, 0 };
-			pass_beg_info.renderArea.extent = context.m_swapchain_extent;
+			pass_beg_info.renderArea.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
 			pass_beg_info.clearValueCount = static_cast<uint32_t>(sizeof(clear_values) / sizeof(*clear_values));
 			pass_beg_info.pClearValues = clear_values;
 
@@ -910,12 +916,10 @@ struct vulkan_tutorial
 
 	och::err_info main_loop()
 	{
-		while (!glfwWindowShouldClose(context.m_window))
-		{
-			check(draw_frame());
+		check(context.begin_message_processing());
 
-			glfwPollEvents();
-		}
+		while (!context.is_window_closed())
+			check(draw_frame());
 
 		check(vkDeviceWaitIdle(context.m_device));
 
@@ -968,9 +972,9 @@ struct vulkan_tutorial
 		present_info.pImageIndices = &image_idx;
 		present_info.pResults = nullptr;
 
-		if (VkResult present_rst = vkQueuePresentKHR(context.m_general_queues[0], &present_info); present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.m_flags.framebuffer_resized)
+		if (VkResult present_rst = vkQueuePresentKHR(context.m_general_queues[0], &present_info); present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.is_framebuffer_resized())
 		{
-			context.m_flags.framebuffer_resized = false;
+			context.m_flags.framebuffer_resized.store(false, std::memory_order::release);
 			recreate_swapchain();
 		}
 		else
@@ -1000,17 +1004,6 @@ struct vulkan_tutorial
 
 	void cleanup_swapchain()
 	{
-		int width, height;
-
-		glfwGetFramebufferSize(context.m_window, &width, &height);
-
-		while (!width || !height)
-		{
-			glfwWaitEvents();
-
-			glfwGetFramebufferSize(context.m_window, &width, &height);
-		}
-
 		vkDeviceWaitIdle(context.m_device);
 
 
@@ -1433,8 +1426,10 @@ struct vulkan_tutorial
 	
 		uniform_buffer_obj ubo;
 	
+		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+
 		ubo.transform =
-			och::perspective(0.785398F, static_cast<float>(context.m_swapchain_extent.width) / context.m_swapchain_extent.height, 0.1F, 10.0F) *
+			och::perspective(0.785398F, static_cast<float>(loaded_swapchain_extent.width) / loaded_swapchain_extent.height, 0.1F, 10.0F) *
 			och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F)) *
 			och::mat4::rotate_z(seconds * 0.785398F);
 	

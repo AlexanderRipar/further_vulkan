@@ -34,6 +34,12 @@
     <Filter Include="extend_io">
       <UniqueIdentifier>{aabdcde1-39a4-4fbb-a1e1-6675404b5b86}</UniqueIdentifier>
     </Filter>
+    <Filter Include="vulkan_base">
+      <UniqueIdentifier>{161bebb9-ac4f-45d1-9dda-f779aaf10eb3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="error_handling">
+      <UniqueIdentifier>{32dd45b5-8605-4dbd-bd87-684761503274}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -51,12 +57,6 @@
     <ClCompile Include="..\..\och_lib\och_lib\och_utf8.cpp">
       <Filter>och_lib</Filter>
     </ClCompile>
-    <ClCompile Include="och_error_handling.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="och_vulkan_base.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="vulkan_tutorial.cpp">
       <Filter>samples\vulkan_tutorial</Filter>
     </ClCompile>
@@ -71,6 +71,12 @@
     </ClCompile>
     <ClCompile Include="truetype.cpp">
       <Filter>extend_io</Filter>
+    </ClCompile>
+    <ClCompile Include="och_vulkan_base.cpp">
+      <Filter>vulkan_base</Filter>
+    </ClCompile>
+    <ClCompile Include="och_error_handling.cpp">
+      <Filter>error_handling</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -107,16 +113,10 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_matmath.h">
       <Filter>och_lib</Filter>
     </ClInclude>
-    <ClInclude Include="och_error_handling.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="och_heap_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="och_helpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="och_vulkan_base.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="vulkan_tutorial.h">
@@ -157,6 +157,12 @@
     </ClInclude>
     <ClInclude Include="image_view.h">
       <Filter>extend_io</Filter>
+    </ClInclude>
+    <ClInclude Include="och_vulkan_base.h">
+      <Filter>vulkan_base</Filter>
+    </ClInclude>
+    <ClInclude Include="och_error_handling.h">
+      <Filter>error_handling</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
