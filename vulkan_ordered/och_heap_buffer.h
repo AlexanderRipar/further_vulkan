@@ -36,14 +36,14 @@ namespace och
 
 		T& operator[](uint32_t n) noexcept
 		{
-			assert(n <= m_range.len());
+			assert(n < m_range.len());
 
 			return m_range[n];
 		}
 
 		const T& operator[](uint32_t n) const noexcept
 		{
-			assert(n <= m_range.len());
+			assert(n < m_range.len());
 
 			return m_range[n];
 		}
