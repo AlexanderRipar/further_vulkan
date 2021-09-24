@@ -237,20 +237,20 @@ uint32_t cmap_f12(const void* raw_tbl, uint32_t cpt) noexcept
 
 truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail, 0, 0, och::fio::share_read_write_delete }
 {
-	const file_type tentative_file_type = query_file_type(m_file);
+	m_flags.is_valid_file = false;
 
-	if (tentative_file_type == file_type::invalid)
+	if (!is_truetype_file(m_file))
 		return;
 
 	m_table_cnt = be_to_le(m_file[0].num_tables);
 
 	// Load tables
 
-	m_glyph_offsets = get_table("loca");
+	m_loca_tbl = get_table("loca");
 
-	m_glyph_data = get_table("glyf");
+	m_glyf_tbl = get_table("glyf");
 
-	m_horizontal_layout_data = get_table("hmtx");
+	m_hmtx_tbl = get_table("hmtx");
 
 	const head_table_data* head_tbl = static_cast<const head_table_data*>(get_table("head"));
 
@@ -260,7 +260,7 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 
 	const cmap_table_data* cmap_tbl = static_cast<const cmap_table_data*>(get_table("cmap"));
 
-	if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_glyph_offsets || !m_glyph_data || !m_horizontal_layout_data)
+	if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_loca_tbl || !m_glyf_tbl || !m_hmtx_tbl)
 		return;
 
 	if (!(m_codepoint_mapper = query_codepoint_mapping(cmap_tbl)).data)
@@ -284,7 +284,22 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 
 	m_max_composite_glyph_cnt = be_to_le(maxp_tbl->max_component_elemenents);
 
-	m_file_type = tentative_file_type;
+	if (const os_2_table_data* os_2_tbl = static_cast<const os_2_table_data*>(get_table("OS/2")))
+		m_line_height = static_cast<float>(be_to_le(os_2_tbl->typo_ascender) - be_to_le(os_2_tbl->typo_descender) + be_to_le(os_2_tbl->typo_line_gap)) * m_normalization_factor;
+	else
+		m_line_height = static_cast<float>(be_to_le(hhea_tbl->ascender) - be_to_le(hhea_tbl->descender) + be_to_le(hhea_tbl->line_gap)) * m_normalization_factor;
+
+	m_flags.is_valid_file = true;
+}
+
+float truetype_file::baseline_offset() const noexcept
+{
+	return -m_y_min_global;
+}
+
+float truetype_file::line_height() const noexcept
+{
+	return m_line_height;
 }
 
 glyph_data truetype_file::get_glyph_data_from_codepoint(char32_t codepoint) const noexcept
@@ -318,7 +333,7 @@ glyph_metrics truetype_file::get_glyph_metrics_from_id(uint32_t glyph_id) const 
 
 truetype_file::operator bool() const noexcept
 {
-	return m_file_type != file_type::invalid;
+	return m_flags.is_valid_file;
 }
 
 const void* truetype_file::get_table(table_tag tag)
@@ -356,6 +371,9 @@ truetype_file::internal_glyph_data truetype_file::get_glyph_data_recursive(uint3
 
 	const glyph_header* header = find_glyph(glyph_id);
 
+	if (!header)
+		return {};
+
 	int16_t contour_cnt = be_to_le(header->num_contours);
 
 	if (contour_cnt >= 0) // Simple Glyph
@@ -369,6 +387,8 @@ truetype_file::internal_glyph_data truetype_file::get_glyph_data_recursive(uint3
 		constexpr uint8_t                    OVERLAP_SIMPLE = 0x40;
 		constexpr uint8_t                      DECODED_BITS = 0x37;
 
+		internal_glyph_data ret;
+
 		const uint16_t* endpt_inds = reinterpret_cast<const uint16_t*>(header + 1);
 
 		const uint16_t point_cnt = be_to_le(endpt_inds[contour_cnt - 1]) + 1;
@@ -378,8 +398,6 @@ truetype_file::internal_glyph_data truetype_file::get_glyph_data_recursive(uint3
 		const uint8_t* instructions = reinterpret_cast<const uint8_t*>(endpt_inds + contour_cnt + 1);
 
 		const uint8_t* raw_data = instructions + instruction_bytes; // Flags, X-Coords, Y-Coords
-
-		internal_glyph_data ret;
 
 		ret.create(point_cnt, contour_cnt);
 
@@ -660,11 +678,25 @@ const truetype_file::glyph_header* truetype_file::find_glyph(uint32_t glyph_id) 
 	uint32_t glyph_offset;
 
 	if (m_flags.full_glyph_offsets)
-		glyph_offset = be_to_le(static_cast<const uint32_t*>(m_glyph_offsets)[glyph_id]);
-	else
-		glyph_offset = be_to_le(static_cast<const uint16_t*>(m_glyph_offsets)[glyph_id]) * 2;
+	{
+		const uint32_t* loca_32 = static_cast<const uint32_t*>(m_loca_tbl);
 
-	return reinterpret_cast<const glyph_header*>(static_cast<const uint8_t*>(m_glyph_data) + glyph_offset);
+		glyph_offset = be_to_le(loca_32[glyph_id]);
+
+		if(glyph_offset == be_to_le(loca_32[glyph_id + 1]))
+			return nullptr;
+	}
+	else
+	{
+		const uint16_t* loca_16 = static_cast<const uint16_t*>(m_loca_tbl);
+
+		glyph_offset = be_to_le(loca_16[glyph_id]) << 1;
+
+		if (glyph_offset == (static_cast<uint32_t>(be_to_le(loca_16[glyph_id + 1])) << 1))
+			return nullptr;
+	}
+
+	return reinterpret_cast<const glyph_header*>(static_cast<const uint8_t*>(m_glyf_tbl) + glyph_offset);
 }
 
 glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const noexcept
@@ -684,13 +716,13 @@ glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const
 
 	if (glyph_id >= m_full_horizontal_layout_cnt)
 	{
-		advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[m_full_horizontal_layout_cnt - 1].advance_width));
-		left_side_bearing = static_cast<float>(be_to_le(reinterpret_cast<const int16_t*>(static_cast<const horizontal_metrics*>(m_horizontal_layout_data) + m_full_horizontal_layout_cnt)[glyph_id - m_full_horizontal_layout_cnt]));
+		advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_hmtx_tbl)[m_full_horizontal_layout_cnt - 1].advance_width));
+		left_side_bearing = static_cast<float>(be_to_le(reinterpret_cast<const int16_t*>(static_cast<const horizontal_metrics*>(m_hmtx_tbl) + m_full_horizontal_layout_cnt)[glyph_id - m_full_horizontal_layout_cnt]));
 	}
 	else
 	{
-		advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].advance_width));
-		left_side_bearing = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_horizontal_layout_data)[glyph_id].left_side_bearing));
+		advance_width = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_hmtx_tbl)[glyph_id].advance_width));
+		left_side_bearing = static_cast<float>(be_to_le(static_cast<const horizontal_metrics*>(m_hmtx_tbl)[glyph_id].left_side_bearing));
 	}
 
 	advance_width = advance_width * m_normalization_factor;
@@ -698,30 +730,41 @@ glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const
 
 	const glyph_header* header = find_glyph(glyph_id);
 
-	const float x_min = be_to_le(header->x_min) * m_normalization_factor - m_x_min_global;
-	const float x_max = be_to_le(header->x_max) * m_normalization_factor - m_x_min_global;
-	const float y_min = be_to_le(header->y_min) * m_normalization_factor - m_y_min_global;
-	const float y_max = be_to_le(header->y_max) * m_normalization_factor - m_y_min_global;
+	float x_min;
+	float x_max;
+	float y_min;
+	float y_max;
+
+	if (header)
+	{
+		x_min = be_to_le(header->x_min) * m_normalization_factor - m_x_min_global;
+		x_max = be_to_le(header->x_max) * m_normalization_factor - m_x_min_global;
+		y_min = be_to_le(header->y_min) * m_normalization_factor - m_y_min_global;
+		y_max = be_to_le(header->y_max) * m_normalization_factor - m_y_min_global;
+	}
+	else
+		x_min = x_max = y_min = y_max = 0.0F;
 
 	return glyph_metrics(x_min, x_max, y_min, y_max, advance_width, left_side_bearing);
 }
 
-truetype_file::file_type truetype_file::query_file_type(const och::mapped_file<file_header>& file) noexcept
+bool truetype_file::is_truetype_file(const och::mapped_file<ttf_file_header>& file) noexcept
 {
 	if (!file)
-		return file_type::invalid;
+		return false;
 
-	if (file[0].version == 0x00000100 || file[0].version == 0x74727565 || file[0].version == 0x74797031)
-		return file_type::truetype;
-	else if (file[0].version == 0x4F54544F)
-		return file_type::opentype;
-	else
-		return file_type::invalid;
+	uint32_t version = file[0].version;
+
+	return version == 0x00000100 || version == 0x74727565 || version == 0x74797031;
 }
 
-truetype_file::codepoint_mapper_data truetype_file::query_codepoint_mapping(const cmap_table_data* cmap_table) noexcept
+truetype_file::codepoint_mapper_data truetype_file::query_codepoint_mapping(const void* cmap_tbl) noexcept
 {
-	uint16_t encoding_cnt = be_to_le(cmap_table->num_tables);
+	struct cmap_header
+	{
+		uint16_t version;
+		uint16_t num_tables;
+	};
 
 	struct encoding_record
 	{
@@ -730,7 +773,9 @@ truetype_file::codepoint_mapper_data truetype_file::query_codepoint_mapping(cons
 		uint32_t table_offset;
 	};
 
-	const encoding_record* curr_encoding = reinterpret_cast<const encoding_record*>(cmap_table + 1);
+	uint16_t encoding_cnt = be_to_le(static_cast<const cmap_header*>(cmap_tbl)->num_tables);
+
+	const encoding_record* curr_encoding = reinterpret_cast<const encoding_record*>(static_cast<const uint8_t*>(cmap_tbl) + sizeof(cmap_header));
 
 	const encoding_record* unicode_full = nullptr;
 
@@ -742,7 +787,7 @@ truetype_file::codepoint_mapper_data truetype_file::query_codepoint_mapping(cons
 
 		uint16_t encoding = be_to_le(curr_encoding->encoding_id);
 
-		uint16_t format = be_to_le(*reinterpret_cast<const uint16_t*>(reinterpret_cast<const uint8_t*>(cmap_table) + be_to_le(curr_encoding->table_offset)));
+		uint16_t format = be_to_le(*reinterpret_cast<const uint16_t*>(reinterpret_cast<const uint8_t*>(cmap_tbl) + be_to_le(curr_encoding->table_offset)));
 
 		// Select best encoding
 
@@ -753,9 +798,9 @@ truetype_file::codepoint_mapper_data truetype_file::query_codepoint_mapping(cons
 	}
 
 	if (unicode_full)
-		return { cmap_f12, reinterpret_cast<const uint8_t*>(cmap_table) + be_to_le(unicode_full->table_offset) };
+		return { cmap_f12, reinterpret_cast<const uint8_t*>(cmap_tbl) + be_to_le(unicode_full->table_offset) };
 	else if (unicode_bmp)
-		return { cmap_f4, reinterpret_cast<const uint8_t*>(cmap_table) + be_to_le(unicode_bmp->table_offset) };
+		return { cmap_f4, reinterpret_cast<const uint8_t*>(cmap_tbl) + be_to_le(unicode_bmp->table_offset) };
 	else
 		return {};
 }
@@ -802,7 +847,8 @@ void truetype_file::internal_glyph_data::create(uint32_t point_cnt_, uint32_t co
 
 void truetype_file::internal_glyph_data::destroy() noexcept
 {
-	free(m_points);
+	if(m_points)
+		free(m_points);
 }
 
 glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metrics, float global_x_min, float global_y_min) noexcept
@@ -845,7 +891,7 @@ glyph_data truetype_file::internal_glyph_data::to_glyph_data(glyph_metrics metri
 
 	const size_t alloc_size = final_point_cnt * sizeof(och::vec2) + final_contour_cnt * sizeof(uint32_t);
 
-	och::vec2* final_points = static_cast<och::vec2*>(malloc(alloc_size));
+	och::vec2* final_points = alloc_size ? static_cast<och::vec2*>(malloc(alloc_size)) : nullptr;
 
 	uint32_t* final_contour_ends = reinterpret_cast<uint32_t*>(final_points + final_point_cnt);
 

@@ -86,16 +86,12 @@ struct truetype_file
 {
 private:
 
-	struct file_header
+	struct ttf_file_header
 	{
 		uint32_t version;
-
 		uint16_t num_tables;
-
 		uint16_t search_range;
-
 		uint16_t entry_selector;
-
 		uint16_t range_shift;
 	};
 
@@ -124,12 +120,7 @@ private:
 		}
 	};
 
-	enum class file_type
-	{
-		invalid,
-		opentype,
-		truetype
-	};
+
 
 	struct head_table_data
 	{
@@ -202,12 +193,50 @@ private:
 		uint16_t version;
 		uint16_t num_tables;
 	};
-	
-	union loca_table_data
+
+	struct os_2_table_data
 	{
-		const uint16_t* short_offsets;
-		const uint32_t* full_offsets;
+		uint16_t version;
+		int16_t x_avg_char_width;
+		uint16_t us_weight_class;
+		uint16_t us_width_class;
+		uint16_t fs_type;
+		int16_t y_subscript_x_size;
+		int16_t y_subscript_y_size;
+		int16_t y_subscript_x_offset;
+		int16_t y_subscript_y_offset;
+		int16_t y_superscript_x_size;
+		int16_t y_superscript_y_size;
+		int16_t y_superscript_x_offset;
+		int16_t y_superscript_y_offset;
+		int16_t y_strikeout_position;
+		int16_t family_class;
+		uint8_t panose[10];
+		uint32_t unicode_range_1;
+		uint32_t unicode_range_2;
+		uint32_t unicode_range_3;
+		uint32_t unicode_range_4;
+		uint8_t vendor_id[4];
+		uint16_t fs_selection;
+		uint16_t first_char_index;
+		uint16_t last_char_index;
+		int16_t typo_ascender;
+		int16_t typo_descender;
+		int16_t typo_line_gap;
+		uint16_t win_ascent;
+		uint16_t win_descent;
+		uint32_t code_page_range_1;
+		uint32_t code_page_range_2;
+		int16_t x_height;
+		int16_t cap_height;
+		uint16_t default_char;
+		uint16_t break_char;
+		uint16_t max_context;
+		uint16_t lower_optical_point_size;
+		uint16_t upper_optical_point_size;
 	};
+
+
 
 	struct glyph_header
 	{
@@ -220,12 +249,12 @@ private:
 
 	struct internal_glyph_data
 	{
-		uint32_t point_cnt;
-		uint32_t contour_cnt;
+		uint32_t point_cnt = 0;
+		uint32_t contour_cnt = 0;
 
 	private:
 
-		och::vec2* m_points;
+		och::vec2* m_points = nullptr;
 
 	public:
 
@@ -252,10 +281,6 @@ private:
 		void transform(float xx, float xy, float yx, float yy) noexcept;
 	};
 
-
-
-	using glyf_fn = glyph_data(*) (const void*, uint32_t) noexcept;
-
 	struct codepoint_mapper_data
 	{
 		using cmap_fn = uint32_t(*) (const void*, uint32_t) noexcept;
@@ -269,13 +294,15 @@ private:
 
 
 
-	och::mapped_file<file_header> m_file;
-
-	file_type m_file_type = file_type::invalid;
+	och::mapped_file<ttf_file_header> m_file;
 
 	uint32_t m_table_cnt;
 
 	uint32_t m_glyph_cnt;
+
+	uint32_t m_full_horizontal_layout_cnt;
+
+	uint32_t m_max_composite_glyph_cnt;
 
 	float m_normalization_factor;
 
@@ -283,26 +310,29 @@ private:
 
 	float m_y_min_global;
 
-	uint32_t m_full_horizontal_layout_cnt;
-
-	uint32_t m_max_composite_glyph_cnt;
+	float m_line_height;
 
 	codepoint_mapper_data m_codepoint_mapper;
 
-	const void* m_glyph_offsets;
+	const void* m_loca_tbl;
 
-	const void* m_glyph_data;
+	const void* m_glyf_tbl;
 
-	const void* m_horizontal_layout_data;
+	const void* m_hmtx_tbl;
 
 	struct
 	{
 		bool full_glyph_offsets : 1;
+		bool is_valid_file : 1;
 	} m_flags{};
 
 public:
 
 	truetype_file(const char* filename) noexcept;
+
+	float baseline_offset() const noexcept;
+
+	float line_height() const noexcept;
 
 	glyph_data get_glyph_data_from_codepoint(char32_t codepoint) const noexcept;
 
@@ -328,7 +358,7 @@ private:
 
 	glyph_metrics internal_get_glyph_metrics(uint32_t glyph_id) const noexcept;
 
-	static file_type query_file_type(const och::mapped_file<file_header>& file) noexcept;
+	static bool is_truetype_file(const och::mapped_file<ttf_file_header>& file) noexcept;
 
-	static codepoint_mapper_data query_codepoint_mapping(const cmap_table_data* cmap_table) noexcept;
+	static codepoint_mapper_data query_codepoint_mapping(const void* cmap_table) noexcept;
 };
