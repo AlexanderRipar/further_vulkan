@@ -1,15 +1,11 @@
 #pragma once
 
 #include "och_error_handling.h"
-
 #include "och_matmath.h"
 
+#include "sdf_image.h"
 #include "truetype.h"
-
 #include "och_heap_buffer.h"
-
-#include "och_fmt.h"
-
 #include "image_view.h"
 
 struct codept_range
@@ -29,40 +25,62 @@ public:
 
 		och::vec2 size;
 
-		och::vec2 advance;
+		och::vec2 bearing;
+
+		float advance;
 	};
 
 private:
-
-	struct glyph_address
-	{
-		uint32_t glyph_id;
-		uint32_t begin;
-		uint32_t stride;
-		uint32_t w;
-		uint32_t h;
-		uint32_t x;
-		uint32_t y;
-	};
-
-	struct codept_id_pair
-	{
-		uint32_t codept;
-		uint32_t glyph_id;
-	};
-
-	struct glyph_dimension
-	{
-		uint32_t glyph_id;
-		float w;
-		float h;
-	};
 
 	struct mapper_range
 	{
 		uint32_t beg;
 		uint32_t end;
 		int32_t offset;
+	};
+
+	struct fileheader
+	{
+		uint32_t m_width;
+		uint32_t m_height;
+		uint32_t m_map_ranges_size;
+		uint32_t m_map_indices_size;
+
+		uint32_t map_ranges_bytes() const noexcept { return m_map_ranges_size * sizeof(mapper_range); }
+
+		uint32_t map_indices_bytes() const noexcept { return m_map_indices_size * sizeof(glyph_index); }
+
+		uint32_t image_bytes() const noexcept { return m_width * m_height; }
+
+		mapper_range* map_ranges_data() noexcept
+		{
+			return reinterpret_cast<mapper_range*>(reinterpret_cast<uint8_t*>(this) + sizeof(*this));
+		}
+
+		const mapper_range* map_ranges_data() const noexcept
+		{
+			return reinterpret_cast<const mapper_range*>(reinterpret_cast<const uint8_t*>(this) + sizeof(*this));
+		}
+
+		glyph_index* map_indices_data() noexcept
+		{
+			return reinterpret_cast<glyph_index*>(reinterpret_cast<uint8_t*>(this) + sizeof(*this) + map_ranges_bytes());
+		}
+
+		const glyph_index* map_indices_data() const noexcept
+		{
+			return reinterpret_cast<const glyph_index*>(reinterpret_cast<const uint8_t*>(this) + sizeof(*this) + map_ranges_bytes());
+		}
+
+		uint8_t* image_data() noexcept
+		{
+			return reinterpret_cast<uint8_t*>(this) + sizeof(*this) + map_ranges_bytes() + map_indices_bytes();
+		}
+
+		const uint8_t* image_data() const noexcept
+		{
+			return reinterpret_cast<const uint8_t*>(this) + sizeof(*this) + map_ranges_bytes() + map_indices_bytes();
+		}
 	};
 
 	uint32_t m_width = 0;
@@ -80,9 +98,24 @@ public:
 	// TODO: 
 	// Calculate advance to save in m_map_indices
 	// Implement mapping equivalent glyphs to a single spot in the image.
-	// Fix wrong sizing of glyphs. bad :(
 	och::err_info create(const char* truetype_filename, uint32_t glyph_size, uint32_t glyph_padding_pixels, float sdf_clamp, uint32_t map_width, const och::range<codept_range> codept_ranges) noexcept
 	{
+		struct glyph_address
+		{
+			uint32_t glyph_id;
+			uint32_t buffer_begin;
+			uint32_t w;
+			uint32_t h;
+			uint32_t x;
+			uint32_t y;
+		};
+
+		struct codept_id_pair
+		{
+			uint32_t codept;
+			uint32_t glyph_id;
+		};
+
 		// Open file
 
 		truetype_file file(truetype_filename);
@@ -97,12 +130,10 @@ public:
 
 		// Create list of (unique) codepoints with their matching glyph ids.
 
-		och::heap_buffer<codept_id_pair> cp_ids(codept_cnt + 1);
+		och::heap_buffer<codept_id_pair> cp_ids(codept_cnt);
 
 		{
-			cp_ids[0].codept = ~0u;
-
-			uint32_t curr_cp_id = 1;
+			uint32_t curr_cp_id = 0;
 
 			for (const auto& r : codept_ranges)
 				for (uint32_t cp = r.beg; cp != r.beg + r.cnt; ++cp)
@@ -110,11 +141,11 @@ public:
 
 			sort<offsetof(codept_id_pair, codept), 3>(cp_ids);
 
-			uint32_t prev_cp = ~0u;
+			uint32_t prev_cp = ~cp_ids[0].codept;
 
-			uint32_t curr_idx = 1;
+			uint32_t curr_idx = 0;
 
-			for (uint32_t i = 1; i != cp_ids.size(); ++i)
+			for (uint32_t i = 0; i != cp_ids.size(); ++i)
 				if (cp_ids[i].codept != prev_cp)
 				{
 					cp_ids[curr_idx++].codept = cp_ids[i].codept;
@@ -130,17 +161,19 @@ public:
 
 		// Create list of (unique) glyph ids
 
-		och::heap_buffer<uint32_t> ids(cp_ids.size());
+		och::heap_buffer<uint32_t> ids(cp_ids.size() + 1);
 
 		{
-			for (uint32_t i = 0; i != ids.size(); ++i)
+			for (uint32_t i = 0; i != cp_ids.size(); ++i)
 				ids[i] = cp_ids[i].glyph_id;
+
+			ids[cp_ids.size()] = 0;
 
 			sort<0, 4>(ids);
 
 			uint32_t curr_idx = 0;
 
-			uint32_t prev_id = ~0u;
+			uint32_t prev_id = ~ids[0];
 
 			for (auto id : ids)
 			{
@@ -174,6 +207,9 @@ public:
 			for (auto& id : ids)
 			{
 				glyph_data glyph = file.get_glyph_data_from_id(id);
+				
+				if (!glyph.metrics().x_size())
+					continue;
 
 				image_view buffer_view(sdf_buffer.data() + curr_beg, padded_glyph_size, 0, 0);
 
@@ -212,9 +248,11 @@ public:
 
 					uint32_t h = max_y - min_y + 1;
 
-					uint32_t beg = curr_beg + min_x + min_y * padded_glyph_size;
-
-					addresses[curr_idx++] = { id, beg, padded_glyph_size, w, h };
+					addresses[curr_idx].glyph_id = id;
+					addresses[curr_idx].buffer_begin = curr_beg + min_x + min_y * padded_glyph_size;
+					addresses[curr_idx].w = w;
+					addresses[curr_idx].h = h;
+					++curr_idx;
 
 					curr_beg += padded_glyph_size * padded_glyph_size;
 				}
@@ -269,7 +307,7 @@ public:
 				for(uint32_t y = 0; y != a.h; ++y)
 					for (uint32_t x = 0; x != a.w; ++x)
 					{
-						uint8_t v = sdf_buffer[a.begin + x + y * a.stride];
+						uint8_t v = sdf_buffer[a.buffer_begin + x + y * padded_glyph_size];
 
 						m_image[a.x + x + glyph_padding_pixels + (a.y + glyph_padding_pixels + y) * m_width] = v;
 					}
@@ -302,24 +340,30 @@ public:
 
 			uint32_t prev_cp = cp_ids[0].codept;
 
-			for (uint32_t i = 1; i != cp_ids.size(); ++i)
+			uint32_t last_beg = cp_ids[0].codept;
+
+			m_map_ranges[0].beg = prev_cp;
+
+			for (uint32_t i = 0; i != cp_ids.size(); ++i)
 				if (cp_ids[i].codept != prev_cp + 1)
 				{
+					m_map_ranges[curr_idx].beg = last_beg;
 					m_map_ranges[curr_idx].end = prev_cp;
-
+					m_map_ranges[curr_idx].offset = static_cast<int32_t>(i - cp_ids[i].codept + 1);
 					++curr_idx;
 
-					prev_cp = cp_ids[i].codept;
-
-					m_map_ranges[curr_idx].beg = prev_cp;
-
-					m_map_ranges[curr_idx].offset = static_cast<int32_t>(i - cp_ids[i].codept);
+					prev_cp = last_beg = cp_ids[i].codept;
 				}
 				else
 					++prev_cp;
+
+			m_map_ranges[range_cnt - 1].end = cp_ids[cp_ids.size() - 1].codept;
+			m_map_ranges[range_cnt - 1].offset = static_cast<int32_t>(cp_ids.size() - 1 - cp_ids[cp_ids.size() - 1].codept + 1);
 		}
 
-		m_map_indices.allocate(cp_ids.size());
+		m_map_indices.allocate(cp_ids.size() + 1);
+
+		m_map_indices[0] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, 0.0F };
 
 		// Generate codepoint indices
 		{
@@ -346,20 +390,23 @@ public:
 						{
 							const glyph_address& a = addresses[static_cast<uint32_t>(mid)];
 
-							const float x = static_cast<float>(a.x) * inv_width;
+							const float position_x = static_cast<float>(a.x) * inv_width;
 
-							const float y = static_cast<float>(a.y) * inv_height;
+							const float position_y = static_cast<float>(a.y) * inv_height;
 
-							const float w = static_cast<float>(a.w) * inv_width;
+							const float size_x = static_cast<float>(a.w) * inv_width;
 
-							const float h = static_cast<float>(a.h) * inv_height;
+							const float size_y = static_cast<float>(a.h) * inv_height;
 
-							// TODO: Calculate advance widths
-							const float adv_x = 0.0F;
+							glyph_metrics mtx = file.get_glyph_metrics_from_id(curr_id);
 
-							const float adv_y = 0.0F;
+							const float bearing_x = mtx.left_side_bearing() * glyph_size * inv_width;
 
-							m_map_indices[i] = { {x, y}, {w, h}, {adv_x, adv_y} };
+							const float bearing_y = (mtx.y_min() - file.baseline_offset()) * glyph_size * inv_height;
+
+							const float advance = mtx.advance_width() * glyph_size * inv_width;
+
+							m_map_indices[i + 1] = { {position_x, position_y}, {size_x, size_y}, {bearing_x, bearing_y}, advance };
 
 							break;
 						}
@@ -370,7 +417,13 @@ public:
 					}
 
 					if (lo > hi)
-						m_map_indices[i] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F} };
+					{
+						glyph_metrics mtx = file.get_glyph_metrics_from_id(curr_id);
+
+						const float advance = mtx.advance_width() * glyph_size * inv_width;
+
+						m_map_indices[i + 1] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, advance };
+					}
 				}
 			}
 		}
@@ -381,6 +434,72 @@ public:
 	void destroy() noexcept
 	{
 		
+	}
+
+	och::err_info save_glfatl(const char* filename, bool overwrite_existing_file = false) const noexcept
+	{
+		const uint32_t image_bytes = m_width * m_height;
+
+		const uint32_t map_ranges_bytes = m_map_ranges.size() * sizeof(*m_map_ranges.data());
+
+		const uint32_t map_indices_bytes = m_map_indices.size() * sizeof(*m_map_indices.data());
+
+		const uint32_t metadata_bytes = 16;
+
+		const uint32_t total_file_bytes = image_bytes + map_ranges_bytes + map_indices_bytes + metadata_bytes;
+
+		och::mapped_file<glyph_atlas::fileheader> output_file(filename, och::fio::access_readwrite, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, och::fio::open_normal, total_file_bytes);
+
+		if (!output_file)
+			return MSG_ERROR("Could not open file");
+
+		// Layout: m_width, m_height, m_map_ranges.size(), m_map_indices.size(), m_map_ranges, m_map_indices, m_image
+
+		glyph_atlas::fileheader& hdr = output_file[0];
+
+		hdr.m_width = m_width;
+
+		hdr.m_height = m_height;
+
+		hdr.m_map_ranges_size = m_map_ranges.size();
+
+		hdr.m_map_indices_size = m_map_indices.size();
+
+		memcpy(hdr.map_ranges_data(), m_map_ranges.data(), map_ranges_bytes);
+
+		memcpy(hdr.map_indices_data(), m_map_indices.data(), map_indices_bytes);
+
+		memcpy(hdr.image_data(), m_image.data(), image_bytes);
+
+		return {};
+	}
+
+	och::err_info load_glfatl(const char* filename) noexcept
+	{
+		const och::mapped_file<const glyph_atlas::fileheader> input_file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+
+		if (!input_file)
+			return MSG_ERROR("Could not open file");
+
+		const glyph_atlas::fileheader& hdr = input_file[0];
+
+		m_width = hdr.m_width;
+		
+		m_height = hdr.m_height;
+
+		m_map_ranges.allocate(hdr.m_map_ranges_size);
+
+		memcpy(m_map_ranges.data(), hdr.map_ranges_data(), hdr.map_ranges_bytes());
+
+		m_map_indices.allocate(hdr.m_map_indices_size);
+
+		memcpy(m_map_indices.data(), hdr.map_indices_data(), hdr.map_indices_bytes());
+
+		m_image.allocate(m_width * m_height);
+
+		memcpy(m_image.data(), hdr.image_data(), hdr.image_bytes());
+
+		return {};
 	}
 
 	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false) const noexcept
@@ -401,11 +520,21 @@ public:
 		return {};
 	}
 
+	uint32_t width() const noexcept { return m_width; }
+
+	uint32_t height() const noexcept { return m_height; }
+
+	uint8_t* data() noexcept { return m_image.data(); }
+
+	const uint8_t* raw_data() const noexcept { return m_image.data(); }
+
+	image_view<uint8_t> view() noexcept { return image_view(m_image.data(), m_width, 0, 0); }
+
+	image_view<const uint8_t> view() const noexcept { return image_view(m_image.data(), m_width, 0, 0); };
+
 	glyph_index operator()(uint32_t codepoint) const noexcept
 	{
 		int64_t lo = 0, hi = m_map_ranges.size() - 1;
-
-		uint32_t location_index = 0;
 
 		while (lo <= hi)
 		{
@@ -416,7 +545,7 @@ public:
 			const uint32_t end_code = m_map_ranges[static_cast<uint32_t>(mid)].end;
 
 			if (beg_code <= codepoint && end_code >= codepoint)
-				location_index = codepoint - beg_code - m_map_ranges[static_cast<uint32_t>(mid)].offset;
+				return m_map_indices[codepoint + m_map_ranges[static_cast<uint32_t>(mid)].offset];
 			else if (beg_code > codepoint)
 				hi = mid - 1;
 			else if (end_code < codepoint)
@@ -425,7 +554,17 @@ public:
 				break;
 		}
 
-		return m_map_indices[location_index];
+		return m_map_indices[0];
+	}
+
+	och::range<const uint8_t> get_mapper_ranges() const noexcept
+	{
+		return och::range<const uint8_t>(reinterpret_cast<const uint8_t*>(m_map_ranges.data()), reinterpret_cast<const uint8_t*>(m_map_ranges.data() + m_map_ranges.size()));
+	}
+
+	och::range<const uint8_t> get_mapper_indices() const noexcept
+	{
+		return och::range<const uint8_t>(reinterpret_cast<const uint8_t*>(m_map_indices.data()), reinterpret_cast<const uint8_t*>(m_map_indices.data() + m_map_indices.size()));
 	}
 
 private:
