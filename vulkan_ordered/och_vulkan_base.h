@@ -6,10 +6,48 @@
 
 #include "och_error_handling.h"
 #include "och_heap_buffer.h"
-#include "och_helpers.h"
+#include "och_virtual_keys.h"
+#include "och_utf8.h"
+#include "simple_vec.h"
 
 namespace och
 {
+	enum class key_event : uint8_t
+	{
+		held = 0,
+		up = 1,
+		down = 2,
+	};
+
+	struct input_event_desc
+	{
+		// Indicates the required state change of m_held_keys[0]
+		key_event m_change_type{};
+
+		// Keys that need to be pressed for the event to fire
+		och::vk m_held_keys[5]{};
+
+		uint16_t m_event_id{};
+
+		constexpr input_event_desc(key_event change_type, och::vk changing_keycode, och::vk held_1 = och::vk::NONE, och::vk held_2 = och::vk::NONE, och::vk held_3 = och::vk::NONE, och::vk held_4 = och::vk::NONE) noexcept
+		{
+			m_change_type = change_type;
+
+			m_held_keys[0] = changing_keycode;
+			m_held_keys[1] = held_1;
+			m_held_keys[2] = held_2;
+			m_held_keys[3] = held_3;
+			m_held_keys[4] = held_4;
+		}
+	};
+
+	struct input_event
+	{
+		uint16_t event_id;
+	};
+
+
+
 	struct required_feature_list
 	{
 		static constexpr uint32_t max_cnt = 8;
@@ -208,6 +246,8 @@ namespace och
 		}
 	};
 
+
+
 	struct queue_family_info
 	{
 		static constexpr uint32_t MAX_QUEUE_CNT = 4;
@@ -225,6 +265,8 @@ namespace och
 		const VkQueue& operator[](size_t n) const noexcept { return queues[n - offset]; }
 	};
 
+
+
 	struct vulkan_context
 	{
 		static inline required_feature_list s_feats;
@@ -236,6 +278,7 @@ namespace och
 		static constexpr uint32_t MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE = 0x419; // WM_USER + 0x19
 
 		static constexpr uint32_t MAX_MESSAGE_PUMP_INITIALIZATION_TIME_MS = 2000;
+
 
 
 		struct
@@ -286,9 +329,9 @@ namespace och
 
 		VkImageUsageFlags m_image_swapchain_usage{};
 
-		std::atomic<VkExtent2D> m_swapchain_extent{};
-
 		uint32_t m_swapchain_image_cnt{};
+
+		VkExtent2D m_swapchain_extent{};
 
 		VkImage m_swapchain_images[MAX_SWAPCHAIN_IMAGE_CNT]{};
 
@@ -302,23 +345,37 @@ namespace och
 
 		void* m_message_pump_initialization_wait_event{}; // Signaled by the message pump thread once it has created its window
 
-		void* m_message_pump_start_wait_event{}; // Signaled once the main thread once the message pump thread to run
+		void* m_message_pump_start_wait_event{}; // Signaled once the main thread wants the message pump thread to run
 
 		const char* m_app_name{};
 
 
-
-		uint8_t m_input_head;
-
-		uint8_t m_input_tail;
-
-		uint64_t m_curr_keys[4]{};
-
-		uint64_t m_prev_keys[4]{};
-
-		och::utf8_char m_input_queue[64];
+		
 
 
+		std::atomic<uint8_t> m_input_char_tail{};
+
+		std::atomic<uint8_t> m_input_char_head{};
+
+		std::atomic<uint8_t> m_input_event_tail{};
+
+		std::atomic<uint8_t> m_input_event_head{};
+
+		uint16_t m_mouse_x{};
+
+		uint16_t m_mouse_y{};
+
+		int32_t m_mouse_vscroll{};
+
+		int32_t m_mouse_hscroll{};
+
+		std::atomic<char32_t> m_input_char_queue[64]{};
+
+		std::atomic<input_event> m_input_event_queue[64]{};
+
+		uint64_t m_pressed_keycodes[4]{};
+
+		simple_vec<input_event_desc> m_input_events{ 0 };
 
 
 		err_info create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
@@ -346,5 +403,31 @@ namespace och
 		bool is_window_closed() const noexcept;
 
 		bool is_framebuffer_resized() const noexcept;
+
+		void enqueue_input_char(uint32_t utf16_cp) noexcept;
+
+		char32_t get_input_char() noexcept;
+
+		char32_t peek_input_char() const noexcept;
+
+		void enqueue_input_event(input_event e) noexcept;
+
+		input_event get_input_event() noexcept;
+
+		input_event peek_input_event() const noexcept;
+
+		uint16_t register_input_event(const input_event_desc& event_desc) noexcept;
+
+		void unregister_input_event(uint16_t event_id) noexcept;
+
+		void check_input_events(och::vk changing_keycode, key_event change_type) noexcept;
+
+		void set_keycode(och::vk keycode) noexcept;
+
+		void unset_keycode(och::vk keycode) noexcept;
+
+		void reset_pressed_keys() noexcept;
+
+		void set_mouse_pos(uint16_t x, uint16_t y) noexcept;
 	};
 }

@@ -10,17 +10,16 @@
 
 #include <vulkan/vulkan_win32.h>
 
-
-
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
-	user_data; type;
+	user_data; type; severity;
 
-	if (severity != VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		if (callback_data->messageIdNumber == 0) // Ignore Loader Message (loaderAddLayerProperties invalid layer manifest file version)
-			return VK_FALSE;
+	if (int32_t msg_id = callback_data->messageIdNumber; 
+		msg_id == 0x0000'0000 ||	// Loader Message (loaderAddLayerProperties invalid layer manifest file version)
+		msg_id == 0x7CD0'911D)		// vkCreateSwapchainKHR wrong image extent (not fixable due to race condition)
+		return VK_FALSE;
 
-	och::print("{}\n\n", callback_data->pMessage);
+	och::print("{:X}\n{}\n\n", callback_data->messageIdNumber, callback_data->pMessage);
 
 	return VK_FALSE;
 }
@@ -31,19 +30,116 @@ int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64
 
 	switch (msg)
 	{
+	case WM_KEYDOWN:
+	case WM_SYSKEYDOWN:
+		ctx->set_keycode(static_cast<och::vk>(wparam));
+		return 0;
+
+	case WM_KEYUP:
+	case WM_SYSKEYUP:
+		ctx->unset_keycode(static_cast<och::vk>(wparam));
+		return 0;
+
+	case WM_LBUTTONDOWN:
+	case WM_RBUTTONDOWN:
+	case WM_MBUTTONDOWN:
+	case WM_XBUTTONDOWN:
+		SetCapture(hwnd);
+		ctx->set_keycode(static_cast<och::vk>(msg - (msg >> 1) - (msg == WM_XBUTTONDOWN && (wparam & (1 << 16))))); //Figure out key from low four bits of message
+		break;
+
+	case WM_LBUTTONUP:
+	case WM_RBUTTONUP:
+	case WM_MBUTTONUP:
+	case WM_XBUTTONUP:
+		ReleaseCapture();
+		ctx->unset_keycode(static_cast<och::vk>((msg >> 1) - (msg == WM_XBUTTONUP && (wparam & (1 << 16))))); //Figure out key from low four bits of message
+		break;
+
+	case WM_MOUSEWHEEL:
+		ctx->m_mouse_vscroll += GET_WHEEL_DELTA_WPARAM(wparam);
+		return 0;
+
+	case WM_MOUSEHWHEEL:
+		ctx->m_mouse_hscroll += GET_WHEEL_DELTA_WPARAM(wparam);
+		return 0;
+
+	case WM_MOUSEMOVE:
+		ctx->set_mouse_pos(LOWORD(lparam), HIWORD(lparam));
+
+		{
+			wchar_t buf[64]{};
+
+			uint32_t idx = 62;
+
+			int16_t y = HIWORD(lparam);
+
+			bool neg_y = y < 0;
+
+			if (neg_y)
+				y = -y;
+
+
+			while (y >= 10)
+			{
+				buf[idx--] = L'0' + (y % 10);
+				y /= 10;
+			}
+
+			buf[idx--] = static_cast<wchar_t>(L'0' + y);
+
+			if (neg_y)
+				buf[idx--] = L'-';
+
+			buf[idx--] = L' ';
+			buf[idx--] = L':';
+			buf[idx--] = L'Y';
+			buf[idx--] = L' ';
+			buf[idx--] = L',';
+
+			int16_t x = LOWORD(lparam);
+
+			bool neg_x = x < 0;
+
+			if (neg_x)
+				x = -x;
+
+			while (x >= 10)
+			{
+				buf[idx--] = L'0' + (x % 10);
+				x /= 10;
+			}
+
+			buf[idx--] = static_cast<wchar_t>(L'0' + x);
+
+			if (neg_x)
+				buf[idx--] = L'-';
+
+			buf[idx--] = L' ';
+			buf[idx--] = L':';
+			buf[idx--] = L'X';
+
+			SetWindowTextW(static_cast<HWND>(ctx->m_hwnd), buf + idx + 1);
+		}
+
+		return 0;
+
+	case WM_KILLFOCUS:
+		ctx->reset_pressed_keys();
+		break;
+
+	case WM_CHAR:
+		ctx->enqueue_input_char(static_cast<uint32_t>(wparam));
+		return 0;
+
 	case WM_SIZE:
-		ctx->m_swapchain_extent.store({ LOWORD(lparam), HIWORD(lparam) }, std::memory_order::release);
 		ctx->m_flags.framebuffer_resized.store(true, std::memory_order::release);
 		return 0;
 
-	case WM_QUIT:
-		PostQuitMessage(0);
-		ctx->m_flags.is_window_closed.store(true, std::memory_order::release);
-		break;
-
 	case WM_CLOSE:
+	case WM_QUIT:
 		ctx->m_flags.is_window_closed.store(true, std::memory_order::release);
-		break;
+		return 0;
 
 	default:
 		break;
@@ -99,13 +195,12 @@ DWORD message_pump_thread_fn(void* data)
 		const uint32_t window_style = WS_OVERLAPPEDWINDOW;
 		const uint32_t window_ex_style = 0;
 
-		VkExtent2D loaded_swapchain_extent = ctx->m_swapchain_extent.load(std::memory_order::acquire);
-
 		RECT rect;
 		rect.left = 0;
-		rect.right = loaded_swapchain_extent.width;
+		rect.right = ctx->m_swapchain_extent.width;
 		rect.top = 0;
-		rect.bottom = loaded_swapchain_extent.height;
+		rect.bottom = ctx->m_swapchain_extent.height;
+
 		if (!AdjustWindowRectEx(&rect, window_style, 0, window_ex_style))
 			return 0x103;
 
@@ -162,83 +257,23 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 
 	m_app_name = app_name;
 
-
-
-	// Create window
-	{
-		// constexpr uint32_t MAX_WINDOW_NAME_CUNITS = 512;
-		// 
-		// wchar_t app_name_wide_buffer[MAX_WINDOW_NAME_CUNITS];
-		// 
-		// const wchar_t* app_name_wide = app_name_wide_buffer;
-		// 
-		// if (!MultiByteToWideChar(65001, 0, app_name, -1, app_name_wide_buffer, static_cast<int>(MAX_WINDOW_NAME_CUNITS)))
-		// 	if(int mb_to_wc_errorcode = GetLastError(); mb_to_wc_errorcode == ERROR_INSUFFICIENT_BUFFER)
-		// 		app_name_wide = L"???";
-		// 	else
-		// 		return MSG_ERROR("Could not convert window name to UTF-16");
-		// 
-		// WNDCLASSEXW window_class{};
-		// window_class.cbSize = sizeof(WNDCLASSEXW);
-		// window_class.style = 0;
-		// window_class.lpfnWndProc = vulkan_context_window_fn;
-		// window_class.cbClsExtra = 0;
-		// window_class.cbWndExtra = 0;
-		// window_class.hInstance = instance;
-		// window_class.hIcon = nullptr;
-		// window_class.hCursor = nullptr;
-		// window_class.hbrBackground = nullptr;
-		// window_class.lpszMenuName = nullptr;
-		// window_class.lpszClassName = WINDOW_CLASS_NAME;
-		// window_class.hIconSm = nullptr;
-		// 
-		// if (!RegisterClassExW(&window_class))
-		// 	return MSG_ERROR("Could not register window class");
-		// 
-		// const uint32_t window_style = WS_OVERLAPPEDWINDOW;
-		// const uint32_t window_ex_style = 0;
-		// 
-		// RECT rect;
-		// rect.left = 0;
-		// rect.right = window_width;
-		// rect.top = 0;
-		// rect.bottom = window_height;
-		// if (!AdjustWindowRectEx(&rect, window_style, 0, window_ex_style))
-		// 	return MSG_ERROR("Could not adjust window rectangle for decorations");
-		// 
-		// m_hwnd = CreateWindowExW(window_ex_style, WINDOW_CLASS_NAME, app_name_wide, window_style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
-		// 
-		// if (!m_hwnd)
-		// 	return MSG_ERROR("Could not create window");
-		// 
-		// SetLastError(0);
-		// 
-		// SetWindowLongPtrW(static_cast<HWND>(m_hwnd), GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
-		// 
-		// if (GetLastError())
-		// 	return MSG_ERROR("Failed to set custom window data");
-		// 
-		// ShowWindow(static_cast<HWND>(m_hwnd), SW_NORMAL);
-		// 
-		// m_swapchain_extent = { window_width, window_height };
-	}
-
 	// Create message pump thread
 	{
-		// First off, create an auto-reset event for the thread to indicate it has completed its window creation
+		// Create an auto-reset event for the thread to indicate it has completed its window creation
 		if (HANDLE wait_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !wait_event)
 			return MSG_ERROR("Failed to create wait event");
 		else
 			m_message_pump_initialization_wait_event = wait_event;
 
-		// Also create an auto-reset event to signal the message pump thread once it should start pumping messages
+		// Create an auto-reset event to signal the message pump thread once it should start pumping messages
 		if (HANDLE continue_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !continue_event)
 			return MSG_ERROR("Failed to create wait event");
 		else
 			m_message_pump_start_wait_event = continue_event;
 
-		// Set m_swapchain_extent to the requested window size for the thread to use during window creation
-		m_swapchain_extent.store({ window_width, window_height }, std::memory_order::release);
+		// Set requested window size in _init_... union member to let the creating thread know what to do
+
+		m_swapchain_extent = { window_width, window_height };
 
 
 		// Now create the thread
@@ -600,23 +635,26 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 			}
 	}
 
-	// Choose initial swapchain extent
-	{
-		if (surface_capabilites.currentExtent.width == ~0u)
-		{
-			VkExtent2D loaded_swapchain_extent = m_swapchain_extent.load(std::memory_order::acquire);
-
-			loaded_swapchain_extent.width = och::clamp(loaded_swapchain_extent.width, surface_capabilites.minImageExtent.width, surface_capabilites.maxImageExtent.width);
-			loaded_swapchain_extent.height = och::clamp(loaded_swapchain_extent.height, surface_capabilites.minImageExtent.height, surface_capabilites.maxImageExtent.height);
-
-			m_swapchain_extent.store(loaded_swapchain_extent, std::memory_order::release);
-		}
-		else
-			m_swapchain_extent.store(surface_capabilites.currentExtent, std::memory_order::release);
-	}
-
 	// Create swapchain
 	{
+		VkExtent2D surface_extent;
+
+		if (surface_capabilites.currentExtent.width == ~0u)
+		{
+			RECT surface_rect;
+
+			GetClientRect(static_cast<HWND>(m_hwnd), &surface_rect);
+
+			surface_extent = { static_cast<uint32_t>(surface_rect.right - surface_rect.left), static_cast<uint32_t>(surface_rect.bottom - surface_rect.top) };
+		}
+		else
+			surface_extent = surface_capabilites.currentExtent;
+
+		if (!surface_extent.width || !surface_extent.height)
+			surface_extent.width = surface_extent.height = 1;
+
+		m_swapchain_extent = surface_extent;
+
 		// Choose image count
 		uint32_t requested_img_cnt = surface_capabilites.minImageCount + 1;
 
@@ -633,7 +671,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		swapchain_ci.minImageCount = requested_img_cnt;
 		swapchain_ci.imageFormat = m_swapchain_format;
 		swapchain_ci.imageColorSpace = m_swapchain_colorspace;
-		swapchain_ci.imageExtent = m_swapchain_extent.load(std::memory_order::acquire);
+		swapchain_ci.imageExtent = { window_width, window_height };
 		swapchain_ci.imageArrayLayers = 1;
 		swapchain_ci.imageUsage = swapchain_image_usage;
 		swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -645,9 +683,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		swapchain_ci.clipped = VK_TRUE; // TODO: VK_FALSE?
 		swapchain_ci.oldSwapchain = nullptr;
 
-		VkResult create_rst = vkCreateSwapchainKHR(m_device, &swapchain_ci, nullptr, &m_swapchain);
-
-		check(create_rst);
+		check(vkCreateSwapchainKHR(m_device, &swapchain_ci, nullptr, &m_swapchain));
 	}
 
 	// Get swapchain images (and the number thereof)
@@ -733,13 +769,15 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 {
 	check(vkDeviceWaitIdle(m_device));
 
-	if (VkExtent2D loaded_swapchain_extent = m_swapchain_extent.load(std::memory_order::acquire); !loaded_swapchain_extent.width || !loaded_swapchain_extent.height)
-		return {};
-
 	// Get surface capabilities for current pre-transform
 
-	VkSurfaceCapabilitiesKHR surface_capabilites;
-	check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilites));
+	VkSurfaceCapabilitiesKHR surface_capabilities;
+	check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities));
+
+	if (!surface_capabilities.currentExtent.width || !surface_capabilities.currentExtent.height)
+		return {};
+
+	m_swapchain_extent = surface_capabilities.currentExtent;
 
 	// Destroy old swapchain's image views
 
@@ -751,9 +789,6 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 
 	// Actually recreate swapchain
 
-	VkSurfaceCapabilitiesKHR surface_capabilities{};
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilites);
-
 	VkSwapchainCreateInfoKHR swapchain_ci{};
 	swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchain_ci.pNext = nullptr;
@@ -762,13 +797,13 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	swapchain_ci.minImageCount = m_swapchain_image_cnt;
 	swapchain_ci.imageFormat = m_swapchain_format;
 	swapchain_ci.imageColorSpace = m_swapchain_colorspace;
-	swapchain_ci.imageExtent = surface_capabilites.currentExtent;
+	swapchain_ci.imageExtent = surface_capabilities.currentExtent;
 	swapchain_ci.imageArrayLayers = 1;
 	swapchain_ci.imageUsage = m_image_swapchain_usage;
 	swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	swapchain_ci.queueFamilyIndexCount = 0;
 	swapchain_ci.pQueueFamilyIndices = nullptr;
-	swapchain_ci.preTransform = surface_capabilites.currentTransform;
+	swapchain_ci.preTransform = surface_capabilities.currentTransform;
 	swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapchain_ci.presentMode = m_swapchain_present_mode;
 	swapchain_ci.clipped = VK_TRUE;
@@ -834,7 +869,7 @@ och::err_info och::vulkan_context::suitable_memory_type_idx(uint32_t& out_memory
 
 och::err_info och::vulkan_context::load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept
 {
-	och::mapped_file<uint32_t> shader_file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+	och::mapped_file<uint32_t> shader_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
 
 	if (!shader_file)
 		return MSG_ERROR("Could not find shader file");
@@ -891,16 +926,6 @@ och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer comman
 	return {};
 }
 
-bool och::vulkan_context::is_window_closed() const noexcept
-{
-	return m_flags.is_window_closed.load(std::memory_order::acquire);
-}
-
-bool och::vulkan_context::is_framebuffer_resized() const noexcept
-{
-	return m_flags.framebuffer_resized.load(std::memory_order::acquire);
-}
-
 och::err_info och::vulkan_context::begin_message_processing() noexcept
 {
 	if (!SetEvent(m_message_pump_start_wait_event))
@@ -912,4 +937,199 @@ och::err_info och::vulkan_context::begin_message_processing() noexcept
 void och::vulkan_context::end_message_processing() noexcept
 {
 	PostMessageW(static_cast<HWND>(m_hwnd), MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE, 0, 0);
+}
+
+bool och::vulkan_context::is_window_closed() const noexcept
+{
+	return m_flags.is_window_closed.load(std::memory_order::acquire);
+}
+
+bool och::vulkan_context::is_framebuffer_resized() const noexcept
+{
+	return m_flags.framebuffer_resized.load(std::memory_order::acquire);
+}
+
+
+
+void och::vulkan_context::enqueue_input_char(uint32_t utf16_cp) noexcept
+{
+	const char16_t hi = utf16_cp & 0xFFFF;
+
+	const char16_t lo = (utf16_cp >> 16) & 0xFFFF;
+
+	const char32_t codept = (hi >= 0xD800 && hi <= 0xDBFF && lo >= 0xDC00 && lo <= 0xDFFF) ? ((static_cast<char32_t>(hi - 0xD800) << 10) | (lo - 0xDC00)) + 0x10000 : static_cast<char32_t>(hi);
+
+	uint8_t loaded_head = m_input_char_head.load(std::memory_order::acquire);
+
+	uint8_t loaded_tail = m_input_char_tail.load(std::memory_order::acquire);
+
+	if (((loaded_head + 1) & 63) == loaded_tail)
+		m_input_char_tail.store((loaded_tail + 1) & 63);
+
+	m_input_char_queue[loaded_head].store(codept, std::memory_order::release);
+
+	m_input_char_head.store((loaded_head + 1) & 63, std::memory_order::release);
+}
+
+char32_t och::vulkan_context::get_input_char() noexcept
+{
+	uint8_t loaded_tail = m_input_char_tail.load(std::memory_order::acquire);
+
+	uint8_t loaded_head = m_input_char_head.load(std::memory_order::acquire);
+
+	if (loaded_head == loaded_tail)
+		return L'\0';
+
+	char32_t next_char = m_input_char_queue[loaded_tail];
+	
+	m_input_char_tail.fetch_add(1);
+
+	m_input_char_tail.fetch_and(63);
+
+	return next_char;
+}
+
+char32_t och::vulkan_context::peek_input_char() const noexcept
+{
+	uint8_t loaded_tail = m_input_char_tail.load(std::memory_order::acquire);
+
+	uint8_t loaded_head = m_input_char_head.load(std::memory_order::acquire);
+
+	if (loaded_head == loaded_tail)
+		return U'\0';
+
+	return m_input_char_queue[loaded_tail].load(std::memory_order::acquire);
+}
+
+
+
+void och::vulkan_context::enqueue_input_event(input_event e) noexcept
+{
+	uint8_t loaded_head = m_input_event_head.load(std::memory_order::acquire);
+
+	uint8_t loaded_tail = m_input_event_tail.load(std::memory_order::acquire);
+
+	if (((loaded_head + 1) & 63) == loaded_tail)
+		m_input_event_tail.store((loaded_tail + 1) & 63);
+
+	m_input_event_queue[loaded_head].store(e, std::memory_order::release);
+
+	m_input_event_head.store((loaded_head + 1) & 63, std::memory_order::release);
+}
+
+och::input_event och::vulkan_context::get_input_event() noexcept
+{
+	uint8_t loaded_tail = m_input_event_tail.load(std::memory_order::acquire);
+
+	uint8_t loaded_head = m_input_event_head.load(std::memory_order::acquire);
+
+	if (loaded_head == loaded_tail)
+		return { 0 };
+
+	och::input_event next_event = m_input_event_queue[loaded_tail];
+
+	m_input_event_tail.fetch_add(1);
+
+	m_input_event_tail.fetch_and(63);
+
+	return next_event;
+}
+
+och::input_event och::vulkan_context::peek_input_event() const noexcept
+{
+	uint8_t loaded_tail = m_input_event_tail.load(std::memory_order::acquire);
+
+	uint8_t loaded_head = m_input_event_head.load(std::memory_order::acquire);
+
+	if (loaded_head == loaded_tail)
+		return { 0 };
+
+	och::input_event next_event = m_input_event_queue[loaded_tail];
+
+	return next_event;
+}
+
+uint16_t och::vulkan_context::register_input_event(const input_event_desc& event_desc) noexcept
+{
+	uint32_t event_cnt = m_input_events.size();
+
+	uint16_t free_id = event_cnt ? m_input_events[event_cnt - 1].m_event_id + 1 : static_cast<uint16_t>(1);
+
+	m_input_events.add(event_desc);
+
+	m_input_events[event_cnt].m_event_id = free_id;
+
+	return free_id;
+}
+
+void och::vulkan_context::unregister_input_event(uint16_t event_id) noexcept
+{
+		for (uint32_t i = 0; i != m_input_events.size(); ++i)
+			if (m_input_events[i].m_event_id == event_id)
+			{
+				m_input_events.remove(i);
+
+				break;
+			}
+}
+
+void och::vulkan_context::check_input_events(och::vk changing_keycode, key_event change_type) noexcept
+{
+	for (const auto& e : m_input_events)
+		if (e.m_change_type == key_event::held)
+		{
+			for (uint32_t i = 0; i != 5; ++i)
+				if (e.m_held_keys[i] == och::vk::NONE)
+					goto ENQUEUE_HELD;
+				else if (!(m_pressed_keycodes[static_cast<uint8_t>(e.m_held_keys[i]) >> 6] & (1ull << static_cast<uint8_t>(e.m_held_keys[i]) & 63)))
+					goto SKIP_HELD;
+
+		ENQUEUE_HELD:
+
+			enqueue_input_event({ e.m_event_id });
+
+		SKIP_HELD:;
+		}
+		else if(e.m_change_type == change_type && e.m_held_keys[0] == changing_keycode)
+		{
+			for (uint32_t i = 0; i != 5; ++i)
+				if (e.m_held_keys[i] == och::vk::NONE)
+					goto ENQUEUE;
+				else if (!(m_pressed_keycodes[static_cast<uint8_t>(e.m_held_keys[i]) >> 6] & (1ull << static_cast<uint8_t>(e.m_held_keys[i]) & 63)))
+					goto SKIP;
+
+		ENQUEUE:
+
+			enqueue_input_event({ e.m_event_id });
+
+		SKIP:;
+		}
+}
+
+void och::vulkan_context::set_keycode(och::vk keycode) noexcept
+{
+	// if (!(m_pressed_keycodes[keycode >> 6] & (1ull << (keycode & 63))))
+	// 	och::print("HI {}\n", och::vk::vk_names[keycode]);
+
+	m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] |= 1ull << (static_cast<uint8_t>(keycode) & 63);
+}
+
+void och::vulkan_context::unset_keycode(och::vk keycode) noexcept
+{
+	// och::print("LO {}\n", och::vk::vk_names[keycode]);
+
+	m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] &= ~(1ull << (static_cast<uint8_t>(keycode) & 63));
+}
+
+void och::vulkan_context::reset_pressed_keys() noexcept
+{
+	for (auto& i : m_pressed_keycodes)
+		i = 0;
+}
+
+void och::vulkan_context::set_mouse_pos(uint16_t x, uint16_t y) noexcept
+{
+	m_mouse_x = x;
+
+	m_mouse_y = y;
 }
