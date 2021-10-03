@@ -1,14 +1,18 @@
 #include "sdf_font.h"
 
+#include <cmath>
+
 #include "och_vulkan_base.h"
-#include "och_fmt.h"
 #include "och_heap_buffer.h"
 #include "och_helpers.h"
 #include "och_matmath.h"
+#include "och_timer.h"
 
 #include "sdf_glyph_atlas.h"
 
-struct compute_font
+#include "och_fmt.h"
+
+struct sdf_font
 {
 	struct font_vertex
 	{
@@ -19,7 +23,14 @@ struct compute_font
 	static constexpr uint32_t MAX_FRAMES_INFLIGHT = 2;
 
 	static constexpr uint32_t MAX_DISPLAY_CHARS = 1024;
-	static_assert(MAX_DISPLAY_CHARS < UINT16_MAX / 4);
+	static_assert(MAX_DISPLAY_CHARS < UINT16_MAX / 6);
+
+	static constexpr float DISPLAY_SCALE = 0.25F;
+
+	static constexpr float DISPLAY_MIN_X = -1.0F;
+	static constexpr float DISPLAY_MIN_Y = -1.0F;
+	static constexpr float DISPLAY_MAX_X =  1.0F;
+	static constexpr float DISPLAY_MAX_Y =  1.0F;
 
 	och::vulkan_context context;
 
@@ -69,7 +80,7 @@ struct compute_font
 
 	VkSampler font_sampler{};
 
-	glyph_atlas m_glf_atlas;
+	glyph_atlas atlas;
 
 
 
@@ -81,17 +92,48 @@ struct compute_font
 
 	VkDeviceMemory index_buffer_memory{};
 
+	VkBuffer staging_buffer{};
 
+	VkDeviceMemory staging_buffer_memory{};
+
+	VkCommandPool staging_command_pool{};
+
+	och::time begin_time;
+
+	uint32_t frame_idx{};
 
 	uint32_t input_cnt{};
 
+	och::vec2 input_pos{ DISPLAY_MIN_X, DISPLAY_MIN_Y };
+
+	uint32_t pos_history_idx{};
+
 	char32_t input_buffer[MAX_DISPLAY_CHARS]{};
+
+	och::vec2 pos_history[MAX_DISPLAY_CHARS]{};
 
 
 
 	och::err_info create()
 	{
-		check(context.create("Compute Font", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
+		och::mat4 test_mat = och::mat4::translate(1.0F, 2.0F, 3.0F);
+
+		test_mat = transpose(test_mat);
+
+		och::print("{}\n", test_mat);
+
+		check(context.create("Compute Font", 1440, 810, 1, 0, 0));
+
+		// Create Staging Command Pool
+		{
+			VkCommandPoolCreateInfo command_pool_ci{};
+			command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			command_pool_ci.pNext = nullptr;
+			command_pool_ci.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+			command_pool_ci.queueFamilyIndex = context.m_general_queues.family_index;
+
+			check(vkCreateCommandPool(context.m_device, &command_pool_ci, nullptr, &staging_command_pool));
+		}
 
 		// Create Render Pass
 		{
@@ -147,7 +189,7 @@ struct compute_font
 
 		// Create Framebuffers
 		{
-			VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+			VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent;
 
 			for (uint32_t i = 0; i != context.m_swapchain_image_cnt; ++i)
 			{
@@ -189,14 +231,19 @@ struct compute_font
 
 			check(vkCreateDescriptorSetLayout(context.m_device, &descriptor_set_layout_ci, nullptr, &descriptor_set_layout));
 			
+			VkPushConstantRange push_constant_range{};
+			push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			push_constant_range.offset = 0;
+			push_constant_range.size = sizeof(och::mat4);
+
 			VkPipelineLayoutCreateInfo pipeline_layout_ci{};
 			pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 			pipeline_layout_ci.pNext = nullptr;
 			pipeline_layout_ci.flags = 0;
 			pipeline_layout_ci.setLayoutCount = 1;
 			pipeline_layout_ci.pSetLayouts = &descriptor_set_layout;
-			pipeline_layout_ci.pushConstantRangeCount = 0;
-			pipeline_layout_ci.pPushConstantRanges = nullptr;
+			pipeline_layout_ci.pushConstantRangeCount = 1;
+			pipeline_layout_ci.pPushConstantRanges = &push_constant_range;
 
 			check(vkCreatePipelineLayout(context.m_device, &pipeline_layout_ci, nullptr, &pipeline_layout));
 
@@ -231,7 +278,14 @@ struct compute_font
 
 			constexpr float clamp = 0.015625F * 2.0F;
 
-			check(m_glf_atlas.create("C:/Windows/Fonts/consola.ttf", 64, 2, clamp, 1024, och::range(ranges)));
+			if (atlas.load_glfatl("textures/renderer_atlas.glfatl"))
+			{
+				check(atlas.create("C:/Windows/Fonts/calibri.ttf", 64, 2, clamp, 1024, och::range(ranges)));
+
+				check(atlas.save_glfatl("textures/renderer_atlas.glfatl", true));
+
+				check(atlas.save_bmp("textures/renderer_atlas.bmp", true));
+			}
 		}
 
 		// Allocate Device Image and Imageview to hold SDF Glyph Atlas
@@ -242,14 +296,14 @@ struct compute_font
 			image_ci.flags = 0;
 			image_ci.imageType = VK_IMAGE_TYPE_2D;
 			image_ci.format = VK_FORMAT_R8_UNORM;
-			image_ci.extent.width = m_glf_atlas.width();
-			image_ci.extent.height = m_glf_atlas.height();
+			image_ci.extent.width = atlas.width();
+			image_ci.extent.height = atlas.height();
 			image_ci.extent.depth = 1;
 			image_ci.mipLevels = 1;
 			image_ci.arrayLayers = 1;
 			image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 			image_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
-			image_ci.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			image_ci.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 			image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			image_ci.queueFamilyIndexCount = 1;
 			image_ci.pQueueFamilyIndices = &context.m_general_queues.family_index;
@@ -261,7 +315,7 @@ struct compute_font
 
 			uint32_t image_mem_type_idx;
 			
-			check(context.suitable_memory_type_idx(image_mem_type_idx, image_memory_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+			check(context.suitable_memory_type_idx(image_mem_type_idx, image_memory_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 			VkMemoryAllocateInfo image_mem_ai{};
 			image_mem_ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -271,45 +325,29 @@ struct compute_font
 			check(vkAllocateMemory(context.m_device, &image_mem_ai, nullptr, &font_image_memory));
 
 			check(vkBindImageMemory(context.m_device, font_image, font_image_memory, 0));
-
-
-
-			VkImageViewCreateInfo image_view_ci{};
-			image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			image_view_ci.pNext = nullptr;
-			image_view_ci.flags = 0;
-			image_view_ci.image = font_image;
-			image_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			image_view_ci.format = VK_FORMAT_R8_UNORM;
-			image_view_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			image_view_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			image_view_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			image_view_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			image_view_ci.subresourceRange;
-			check(vkCreateImageView(context.m_device, &image_view_ci, nullptr, &font_image_view));
 		}
 
 		// Push SDF Glyph Atlas Image to Device
 		{
 			// Create a staging buffer
 
-			VkBuffer staging_buffer;
+			VkBuffer img_staging_buffer;
 
-			VkDeviceMemory staging_buffer_memory;
+			VkDeviceMemory img_staging_buffer_memory;
 
 			VkBufferCreateInfo buffer_ci{};
 			buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			buffer_ci.pNext = nullptr;
 			buffer_ci.flags = 0;
-			buffer_ci.size = m_glf_atlas.width() * m_glf_atlas.height();
+			buffer_ci.size = atlas.width() * atlas.height();
 			buffer_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 			buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			buffer_ci.queueFamilyIndexCount = 1;
 			buffer_ci.pQueueFamilyIndices = &context.m_general_queues.family_index;
-			check(vkCreateBuffer(context.m_device, &buffer_ci, nullptr, &staging_buffer));
+			check(vkCreateBuffer(context.m_device, &buffer_ci, nullptr, &img_staging_buffer));
 
 			VkMemoryRequirements buffer_memory_reqs{};
-			vkGetBufferMemoryRequirements(context.m_device, staging_buffer, &buffer_memory_reqs);
+			vkGetBufferMemoryRequirements(context.m_device, img_staging_buffer, &buffer_memory_reqs);
 
 			uint32_t buffer_mem_type_idx;
 			
@@ -321,63 +359,102 @@ struct compute_font
 			buffer_mem_ai.allocationSize = buffer_memory_reqs.size;
 			buffer_mem_ai.memoryTypeIndex = buffer_mem_type_idx;
 
-			check(vkAllocateMemory(context.m_device, &buffer_mem_ai, nullptr, &staging_buffer_memory));
+			check(vkAllocateMemory(context.m_device, &buffer_mem_ai, nullptr, &img_staging_buffer_memory));
 
-			check(vkBindBufferMemory(context.m_device, staging_buffer, staging_buffer_memory, 0));
+			check(vkBindBufferMemory(context.m_device, img_staging_buffer, img_staging_buffer_memory, 0));
 
 			// Copy data to the staging buffer
 
 			void* buffer_ptr;
-			check(vkMapMemory(context.m_device, staging_buffer_memory, 0, VK_WHOLE_SIZE, 0, &buffer_ptr));
+			check(vkMapMemory(context.m_device, img_staging_buffer_memory, 0, VK_WHOLE_SIZE, 0, &buffer_ptr));
 
-			memcpy(buffer_ptr, m_glf_atlas.data(), m_glf_atlas.width() * m_glf_atlas.height());
+			memcpy(buffer_ptr, atlas.data(), atlas.width() * atlas.height());
 
-			vkUnmapMemory(context.m_device, staging_buffer_memory);
+			vkUnmapMemory(context.m_device, img_staging_buffer_memory);
 
 			// Copy data from staging buffer to image
 
 			VkCommandBuffer staging_command_buffer;
 
-			check(context.begin_onetime_command(staging_command_buffer, command_pool));
+			check(context.begin_onetime_command(staging_command_buffer, staging_command_pool));
 
-			VkImageMemoryBarrier transition_barrier{};
-			transition_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			transition_barrier.pNext = nullptr;
-			transition_barrier.srcAccessMask = VK_ACCESS_NONE_KHR;
-			transition_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			transition_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			transition_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			transition_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			transition_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			transition_barrier.image = font_image;
-			transition_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			transition_barrier.subresourceRange.baseMipLevel = 0;
-			transition_barrier.subresourceRange.levelCount = 1;
-			transition_barrier.subresourceRange.baseArrayLayer = 0;
-			transition_barrier.subresourceRange.layerCount = 1;
-			vkCmdPipelineBarrier(staging_command_buffer, VK_PIPELINE_STAGE_NONE_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &transition_barrier);
+			VkImageMemoryBarrier transfer_dst_transition_barrier{};
+			transfer_dst_transition_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			transfer_dst_transition_barrier.pNext = nullptr;
+			transfer_dst_transition_barrier.srcAccessMask = VK_ACCESS_NONE_KHR;
+			transfer_dst_transition_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			transfer_dst_transition_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			transfer_dst_transition_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			transfer_dst_transition_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			transfer_dst_transition_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			transfer_dst_transition_barrier.image = font_image;
+			transfer_dst_transition_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			transfer_dst_transition_barrier.subresourceRange.baseMipLevel = 0;
+			transfer_dst_transition_barrier.subresourceRange.levelCount = 1;
+			transfer_dst_transition_barrier.subresourceRange.baseArrayLayer = 0;
+			transfer_dst_transition_barrier.subresourceRange.layerCount = 1;
+			vkCmdPipelineBarrier(staging_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &transfer_dst_transition_barrier);
 
 			VkBufferImageCopy buf_img_copy{};
 			buf_img_copy.bufferOffset = 0;
-			buf_img_copy.bufferRowLength = m_glf_atlas.width();
-			buf_img_copy.bufferImageHeight = m_glf_atlas.height();
+			buf_img_copy.bufferRowLength = atlas.width();
+			buf_img_copy.bufferImageHeight = atlas.height();
 			buf_img_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			buf_img_copy.imageSubresource.mipLevel = 1;
-			buf_img_copy.imageSubresource.baseArrayLayer = 1;
+			buf_img_copy.imageSubresource.mipLevel = 0;
+			buf_img_copy.imageSubresource.baseArrayLayer = 0;
 			buf_img_copy.imageSubresource.layerCount = 1;
 			buf_img_copy.imageOffset.x = 0;
 			buf_img_copy.imageOffset.y = 0;
 			buf_img_copy.imageOffset.z = 0;
-			buf_img_copy.imageExtent.width = m_glf_atlas.width();
-			buf_img_copy.imageExtent.height = m_glf_atlas.height();
+			buf_img_copy.imageExtent.width = atlas.width();
+			buf_img_copy.imageExtent.height = atlas.height();
 			buf_img_copy.imageExtent.depth = 1;
-			vkCmdCopyBufferToImage(staging_command_buffer, staging_buffer, font_image, VK_IMAGE_LAYOUT_UNDEFINED, 0, nullptr);
+			vkCmdCopyBufferToImage(staging_command_buffer, img_staging_buffer, font_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buf_img_copy);
 
-			context.submit_onetime_command(staging_command_buffer, command_pool, context.m_general_queues[0], true);
+			VkImageMemoryBarrier shader_read_transition_barrier{};
+			shader_read_transition_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			shader_read_transition_barrier.pNext = nullptr;
+			shader_read_transition_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			shader_read_transition_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			shader_read_transition_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			shader_read_transition_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			shader_read_transition_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			shader_read_transition_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			shader_read_transition_barrier.image = font_image;
+			shader_read_transition_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			shader_read_transition_barrier.subresourceRange.baseMipLevel = 0;
+			shader_read_transition_barrier.subresourceRange.levelCount = 1;
+			shader_read_transition_barrier.subresourceRange.baseArrayLayer = 0;
+			shader_read_transition_barrier.subresourceRange.layerCount = 1;
+			vkCmdPipelineBarrier(staging_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &shader_read_transition_barrier);
 
-			vkDestroyBuffer(context.m_device, staging_buffer, nullptr);
+			context.submit_onetime_command(staging_command_buffer, staging_command_pool, context.m_general_queues[0], true);
 
-			vkFreeMemory(context.m_device, staging_buffer_memory, nullptr);
+			vkDestroyBuffer(context.m_device, img_staging_buffer, nullptr);
+
+			vkFreeMemory(context.m_device, img_staging_buffer_memory, nullptr);
+		}
+
+		// Create Image View from atlas Image
+		{
+			VkImageViewCreateInfo image_view_ci{};
+			image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			image_view_ci.pNext = nullptr;
+			image_view_ci.flags = 0;
+			image_view_ci.image = font_image;
+			image_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			image_view_ci.format = VK_FORMAT_R8_UNORM;
+			image_view_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			image_view_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			image_view_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			image_view_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			image_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			image_view_ci.subresourceRange.baseMipLevel = 0;
+			image_view_ci.subresourceRange.levelCount = 1;
+			image_view_ci.subresourceRange.baseArrayLayer = 0;
+			image_view_ci.subresourceRange.layerCount = 1;
+
+			check(vkCreateImageView(context.m_device, &image_view_ci, nullptr, &font_image_view));
 		}
 
 		// Create Sampler for SDF
@@ -456,7 +533,7 @@ struct compute_font
 			buffer_ci.pNext = nullptr;
 			buffer_ci.flags = 0;
 			buffer_ci.size = sizeof(font_vertex) * MAX_DISPLAY_CHARS * 4;
-			buffer_ci.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			buffer_ci.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			buffer_ci.queueFamilyIndexCount = 1;
 			buffer_ci.pQueueFamilyIndices = &context.m_general_queues.family_index;
@@ -489,7 +566,7 @@ struct compute_font
 			buffer_ci.pNext = nullptr;
 			buffer_ci.flags = 0;
 			buffer_ci.size = 2 * 6 * MAX_DISPLAY_CHARS;
-			buffer_ci.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+			buffer_ci.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			buffer_ci.queueFamilyIndexCount = 1;
 			buffer_ci.pQueueFamilyIndices = &context.m_general_queues.family_index;
@@ -515,12 +592,47 @@ struct compute_font
 			check(vkBindBufferMemory(context.m_device, index_buffer, index_buffer_memory, 0));
 		}
 
-		// Create Command Buffers
+		// Create Staging Buffer
+		{
+			constexpr uint32_t staging_buffer_bytes = sizeof(font_vertex) * 4 + sizeof(uint16_t) * 6;
+
+			VkBufferCreateInfo buffer_ci{};
+			buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			buffer_ci.pNext = nullptr;
+			buffer_ci.flags = 0;
+			buffer_ci.size = staging_buffer_bytes;
+			buffer_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			buffer_ci.queueFamilyIndexCount = 1;
+			buffer_ci.pQueueFamilyIndices = &context.m_general_queues.family_index;
+
+			check(vkCreateBuffer(context.m_device, &buffer_ci, nullptr, &staging_buffer));
+
+			VkMemoryRequirements memory_reqs{};
+
+			vkGetBufferMemoryRequirements(context.m_device, staging_buffer, &memory_reqs);
+
+			uint32_t memory_type_idx;
+
+			check(context.suitable_memory_type_idx(memory_type_idx, memory_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+
+			VkMemoryAllocateInfo memory_ai{};
+			memory_ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			memory_ai.pNext = nullptr;
+			memory_ai.allocationSize = memory_reqs.size;
+			memory_ai.memoryTypeIndex = memory_type_idx;
+
+			check(vkAllocateMemory(context.m_device, &memory_ai, nullptr, &staging_buffer_memory));
+
+			check(vkBindBufferMemory(context.m_device, staging_buffer, staging_buffer_memory, 0));
+		}
+
+		// Create Command Pool and -Buffers
 		{
 			VkCommandPoolCreateInfo command_pool_ci{};
 			command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 			command_pool_ci.pNext = nullptr;
-			command_pool_ci.flags = 0;
+			command_pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 			command_pool_ci.queueFamilyIndex = context.m_general_queues.family_index;
 			check(vkCreateCommandPool(context.m_device, &command_pool_ci, nullptr, &command_pool));
 
@@ -533,14 +645,240 @@ struct compute_font
 			check(vkAllocateCommandBuffers(context.m_device, &command_buffer_ai, command_buffers));
 		}
 
-		
+		begin_time = och::time::now();
 
 		return {};
 	}
 
 	och::err_info run()
 	{
-		
+		check(context.begin_message_processing());
+
+		while (!context.is_window_closed())
+		{
+			if (char32_t c = context.get_input_char(); c && input_cnt < MAX_DISPLAY_CHARS)
+				if (c == L'\r')
+				{
+					pos_history[pos_history_idx++] = input_pos;
+
+					input_pos = { DISPLAY_MIN_X, input_pos.y + atlas.line_height() * DISPLAY_SCALE };
+				}
+				else if (c == L'\b')
+				{
+					if (pos_history_idx)
+					{
+						if (pos_history[pos_history_idx - 1].y == input_pos.y)
+							--input_cnt;
+
+						input_pos = pos_history[--pos_history_idx];
+					}
+				}
+				else
+				{
+					input_buffer[input_cnt] = c;
+
+					glyph_atlas::glyph_index glf = atlas(c);
+
+					if (input_pos.x + DISPLAY_SCALE * (glf.real_extent.x + glf.real_bearing.x) > DISPLAY_MAX_X)
+					{
+						pos_history[pos_history_idx++] = input_pos;
+
+						input_pos = { DISPLAY_MIN_X, input_pos.y + atlas.line_height() * DISPLAY_SCALE };
+					}
+
+					VkCommandBuffer staging_command_buffer;
+
+					struct staging_buf_struct
+					{
+						font_vertex verts[4];
+
+						uint16_t inds[6];
+					};
+
+					void* staging_buffer_ptr;
+
+					check(vkMapMemory(context.m_device, staging_buffer_memory, 0, VK_WHOLE_SIZE, 0, &staging_buffer_ptr));
+
+					staging_buf_struct& sb = *static_cast<staging_buf_struct*>(staging_buffer_ptr);
+
+					sb.verts[0].atlas_pos  = glf.atlas_position;
+					sb.verts[1].atlas_pos  = glf.atlas_position + och::vec2(glf.atlas_extent.x, 0.0F);
+					sb.verts[2].atlas_pos  = glf.atlas_position + och::vec2(0.0F, glf.atlas_extent.y);
+					sb.verts[3].atlas_pos  = glf.atlas_position + glf.atlas_extent;
+
+					sb.verts[0].screen_pos = input_pos + DISPLAY_SCALE *  glf.real_bearing;
+					sb.verts[1].screen_pos = input_pos + DISPLAY_SCALE * (glf.real_bearing + och::vec2(glf.real_extent.x, 0));
+					sb.verts[2].screen_pos = input_pos + DISPLAY_SCALE * (glf.real_bearing + och::vec2(0, glf.real_extent.y));
+					sb.verts[3].screen_pos = input_pos + DISPLAY_SCALE * (glf.real_bearing + glf.real_extent);
+
+					const uint16_t start_idx = static_cast<uint16_t>(input_cnt * 4);
+
+					sb.inds[0] = start_idx + 0;
+					sb.inds[1] = start_idx + 2;
+					sb.inds[2] = start_idx + 1;
+					sb.inds[3] = start_idx + 1;
+					sb.inds[4] = start_idx + 2;
+					sb.inds[5] = start_idx + 3;
+
+					och::print("CHAR {} (0x{:4>~0X})\n({}, {}) -> ({}, {})\n({}, {}) -> ({}, {})\n({}, {}) -> ({}, {})\n({}, {}) -> ({}, {})\n\n",
+						c, static_cast<uint32_t>(c),
+						sb.verts[0].atlas_pos.x,
+						sb.verts[0].atlas_pos.y,
+						sb.verts[0].screen_pos.x,
+						sb.verts[0].screen_pos.y,
+						sb.verts[1].atlas_pos.x,
+						sb.verts[1].atlas_pos.y,
+						sb.verts[1].screen_pos.x,
+						sb.verts[1].screen_pos.y,
+						sb.verts[2].atlas_pos.x,
+						sb.verts[2].atlas_pos.y,
+						sb.verts[2].screen_pos.x,
+						sb.verts[2].screen_pos.y,
+						sb.verts[3].atlas_pos.x,
+						sb.verts[3].atlas_pos.y,
+						sb.verts[3].screen_pos.x,
+						sb.verts[3].screen_pos.y
+					);
+
+					vkUnmapMemory(context.m_device, staging_buffer_memory);
+
+
+
+					check(context.begin_onetime_command(staging_command_buffer, staging_command_pool));
+
+					VkBufferMemoryBarrier before_barriers[2]{};
+					// vertex_buffer
+					before_barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+					before_barriers[0].pNext = nullptr;
+					before_barriers[0].srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+					before_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					before_barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					before_barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					before_barriers[0].buffer = vertex_buffer;
+					before_barriers[0].offset = 0;
+					before_barriers[0].size = VK_WHOLE_SIZE;
+					// index_buffer
+					before_barriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+					before_barriers[1].pNext = nullptr;
+					before_barriers[1].srcAccessMask = VK_ACCESS_INDEX_READ_BIT;
+					before_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					before_barriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					before_barriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					before_barriers[1].buffer = index_buffer;
+					before_barriers[1].offset = 0;
+					before_barriers[1].size = VK_WHOLE_SIZE;
+
+					vkCmdPipelineBarrier(staging_command_buffer, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 2, before_barriers, 0, nullptr);
+
+					VkBufferCopy vertex_copy{};
+					vertex_copy.srcOffset = 0;
+					vertex_copy.dstOffset = input_cnt * 4 * sizeof(font_vertex);
+					vertex_copy.size = 4 * sizeof(font_vertex);
+
+					vkCmdCopyBuffer(staging_command_buffer, staging_buffer, vertex_buffer, 1, &vertex_copy);
+
+					VkBufferCopy index_copy{};
+					index_copy.srcOffset = 4 * sizeof(font_vertex);
+					index_copy.dstOffset = input_cnt * 6 * sizeof(uint16_t);
+					index_copy.size = 6 * sizeof(uint16_t);
+
+					vkCmdCopyBuffer(staging_command_buffer, staging_buffer, index_buffer, 1, &index_copy);
+
+					VkBufferMemoryBarrier after_barriers[2]{};
+					// vertex_buffer
+					after_barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+					after_barriers[0].pNext = nullptr;
+					after_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					after_barriers[0].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+					after_barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					after_barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					after_barriers[0].buffer = vertex_buffer;
+					after_barriers[0].offset = 0;
+					after_barriers[0].size = VK_WHOLE_SIZE;
+					// index_buffer
+					after_barriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+					after_barriers[1].pNext = nullptr;
+					after_barriers[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					after_barriers[1].dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
+					after_barriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					after_barriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					after_barriers[1].buffer = index_buffer;
+					after_barriers[1].offset = 0;
+					after_barriers[1].size = VK_WHOLE_SIZE;
+
+					vkCmdPipelineBarrier(staging_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, nullptr, 2, after_barriers, 0, nullptr);
+
+					check(context.submit_onetime_command(staging_command_buffer, staging_command_pool, context.m_general_queues[0]));
+
+					++input_cnt;
+
+					pos_history[pos_history_idx++] = input_pos;
+
+					input_pos.x += glf.real_advance * DISPLAY_SCALE;
+				}
+
+			check(vkWaitForFences(context.m_device, 1, &frame_inflight_fences[frame_idx], VK_FALSE, UINT64_MAX));
+
+			uint32_t swapchain_idx;
+
+			VkResult acquire_rst = vkAcquireNextImageKHR(context.m_device, context.m_swapchain, UINT64_MAX, image_available_semaphores[frame_idx], nullptr, &swapchain_idx);
+
+			if (acquire_rst == VK_ERROR_OUT_OF_DATE_KHR)
+			{
+				check(recreate_swapchain());
+
+				continue;
+			}
+			else if (acquire_rst != VK_SUBOPTIMAL_KHR)
+				check(acquire_rst);
+
+			if (image_inflight_fences[swapchain_idx] != nullptr)
+				check(vkWaitForFences(context.m_device, 1, &image_inflight_fences[swapchain_idx], VK_FALSE, UINT64_MAX));
+
+			image_inflight_fences[swapchain_idx] = frame_inflight_fences[frame_idx];
+
+			check(record_command_buffer(command_buffers[frame_idx], swapchain_idx));
+
+			VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+			VkSubmitInfo submit_info{};
+			submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submit_info.pNext = nullptr;
+			submit_info.waitSemaphoreCount = 1;
+			submit_info.pWaitSemaphores = &image_available_semaphores[frame_idx];
+			submit_info.pWaitDstStageMask = &wait_stage;
+			submit_info.commandBufferCount = 1;
+			submit_info.pCommandBuffers = &command_buffers[frame_idx];
+			submit_info.signalSemaphoreCount = 1;
+			submit_info.pSignalSemaphores = &render_complete_semaphores[frame_idx];
+
+			check(vkResetFences(context.m_device, 1, &frame_inflight_fences[frame_idx]));
+
+			check(vkQueueSubmit(context.m_general_queues[0], 1, &submit_info, frame_inflight_fences[frame_idx]));
+
+			VkPresentInfoKHR present_info{};
+			present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			present_info.pNext = nullptr;
+			present_info.waitSemaphoreCount = 1;
+			present_info.pWaitSemaphores = &render_complete_semaphores[frame_idx];
+			present_info.swapchainCount = 1;
+			present_info.pSwapchains = &context.m_swapchain;
+			present_info.pImageIndices = &swapchain_idx;
+			present_info.pResults = nullptr;
+
+			VkResult present_rst = vkQueuePresentKHR(context.m_general_queues[0], &present_info);
+
+			if (present_rst == VK_ERROR_OUT_OF_DATE_KHR || present_rst == VK_SUBOPTIMAL_KHR || context.is_framebuffer_resized())
+			{
+				context.m_flags.framebuffer_resized.store(false, std::memory_order::release);
+
+				recreate_swapchain();
+			}
+			else
+				check(present_rst);
+
+			frame_idx = (frame_idx + 1) % MAX_FRAMES_INFLIGHT;
+		}
 
 		return {};
 	}
@@ -549,6 +887,29 @@ struct compute_font
 	{
 		if (!context.m_device || vkDeviceWaitIdle(context.m_device) != VK_SUCCESS)
 			return;
+
+		vkDestroySampler(context.m_device, font_sampler, nullptr);
+
+		vkDestroyImageView(context.m_device, font_image_view, nullptr);
+
+		vkDestroyImage(context.m_device, font_image, nullptr);
+
+		vkFreeMemory(context.m_device, font_image_memory, nullptr);
+
+		vkDestroyBuffer(context.m_device, staging_buffer, nullptr);
+
+		vkFreeMemory(context.m_device, staging_buffer_memory, nullptr);
+
+		vkDestroyBuffer(context.m_device, vertex_buffer, nullptr);
+
+		vkFreeMemory(context.m_device, vertex_buffer_memory, nullptr);
+
+		vkDestroyBuffer(context.m_device, index_buffer, nullptr);
+
+		vkFreeMemory(context.m_device, index_buffer_memory, nullptr);
+
+		for (auto& framebuffer : frame_buffers)
+			vkDestroyFramebuffer(context.m_device, framebuffer, nullptr);
 
 		for(auto& s : image_available_semaphores)
 			vkDestroySemaphore(context.m_device, s, nullptr);
@@ -573,6 +934,8 @@ struct compute_font
 
 		vkDestroyCommandPool(context.m_device, command_pool, nullptr);
 
+		vkDestroyCommandPool(context.m_device, staging_command_pool, nullptr);
+
 		vkDestroyDescriptorPool(context.m_device, descriptor_pool, nullptr);
 
 		context.destroy();
@@ -587,7 +950,7 @@ struct compute_font
 		command_buffer_bi.pInheritanceInfo = nullptr;
 		check(vkBeginCommandBuffer(command_buffer, &command_buffer_bi));
 
-		VkClearValue clear_value = { 0.0F, 0.0F, 0.0F, 1.0F };
+		VkClearValue clear_value = { 0.8F, 0.8F, 0.8F, 1.0F };
 
 		VkRenderPassBeginInfo render_pass_bi{};
 		render_pass_bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -596,33 +959,78 @@ struct compute_font
 		render_pass_bi.framebuffer = frame_buffers[swapchain_idx];
 		render_pass_bi.renderArea.offset.x = 0;
 		render_pass_bi.renderArea.offset.y = 0;
-		render_pass_bi.renderArea.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+		render_pass_bi.renderArea.extent = context.m_swapchain_extent;
 		render_pass_bi.clearValueCount = 1;
 		render_pass_bi.pClearValues = &clear_value;
 
 		vkCmdBeginRenderPass(command_buffer, &render_pass_bi, VK_SUBPASS_CONTENTS_INLINE);
 
+		const float w = static_cast<float>(context.m_swapchain_extent.width);
+		const float h = static_cast<float>(context.m_swapchain_extent.height);
+		const float scale_x = 512.0F / w;
+		const float scale_y = 512.0F / h;
+
+		const och::timespan delta_ts = och::time::now() - begin_time;
+		const float delta_t = static_cast<float>(delta_ts.milliseconds()) / 1024.0F;
+		const float rot = sinf(delta_t);
+
+		const och::mat4 push_constant_mat = och::mat4::translate(1.0F, 1.0F, 0.0F) * och::mat4::scale(scale_x, scale_y, 1.0F) * och::mat4::translate(-1.0F, -1.0F, 0.0F);
+
+		vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(och::mat4), &push_constant_mat);
+
 		vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		// TODO
-		// vkCmdBindVertexBuffers(command_buffer, ...);
+		VkDeviceSize buffer_offset = 0;
 
-		// TODO
-		// vkCmdBindIndexBuffer(command_buffer, ...);
+		vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer, &buffer_offset);
+
+		vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
 		vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
 
-		// TODO
-		// vkCmdDrawIndexed(command_buffer, ...);
+		vkCmdDrawIndexed(command_buffer, input_cnt * 6, 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(command_buffer);
 
 		check(vkEndCommandBuffer(command_buffer));
+
+		return {};
 	}
 
 	och::err_info recreate_swapchain()
 	{
+		check(vkDeviceWaitIdle(context.m_device));
+
+
+		// Cleanup
+		
+		for (auto& framebuffer : frame_buffers)
+			vkDestroyFramebuffer(context.m_device, framebuffer, nullptr);
+
+		vkDestroyPipeline(context.m_device, pipeline, nullptr);
+
+
+		// Actual Recreation
+
 		context.recreate_swapchain();
+
+		check(create_pipeline());
+
+		for (uint32_t i = 0; i != context.m_swapchain_image_cnt; ++i)
+		{
+			VkFramebufferCreateInfo framebuffer_ci{};
+			framebuffer_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebuffer_ci.pNext = nullptr;
+			framebuffer_ci.flags = 0;
+			framebuffer_ci.renderPass = render_pass;
+			framebuffer_ci.attachmentCount = 1;
+			framebuffer_ci.pAttachments = context.m_swapchain_image_views + i;
+			framebuffer_ci.width = context.m_swapchain_extent.width;
+			framebuffer_ci.height = context.m_swapchain_extent.height;
+			framebuffer_ci.layers = 1;
+
+			check(vkCreateFramebuffer(context.m_device, &framebuffer_ci, nullptr, frame_buffers + i));
+		}
 
 		return {};
 	}
@@ -643,7 +1051,7 @@ struct compute_font
 		shader_stages[1].pNext = nullptr;
 		shader_stages[1].flags = 0;
 		shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		shader_stages[1].module; frag_shader_module;
+		shader_stages[1].module = frag_shader_module;
 		shader_stages[1].pName = "main";
 		shader_stages[1].pSpecializationInfo = nullptr;
 
@@ -659,10 +1067,10 @@ struct compute_font
 		vertex_attribute_descs[0].format = VK_FORMAT_R32G32_SFLOAT;
 		vertex_attribute_descs[0].offset = offsetof(font_vertex, atlas_pos);
 		// screen_pos
-		vertex_attribute_descs[0].location = 0;
-		vertex_attribute_descs[0].binding = 0;
-		vertex_attribute_descs[0].format = VK_FORMAT_R32G32_SFLOAT;
-		vertex_attribute_descs[0].offset = offsetof(font_vertex, screen_pos);
+		vertex_attribute_descs[1].location = 1;
+		vertex_attribute_descs[1].binding = 0;
+		vertex_attribute_descs[1].format = VK_FORMAT_R32G32_SFLOAT;
+		vertex_attribute_descs[1].offset = offsetof(font_vertex, screen_pos);
 
 		VkPipelineVertexInputStateCreateInfo vertex_input_ci{};
 		vertex_input_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -680,19 +1088,17 @@ struct compute_font
 		input_assembly_ci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		input_assembly_ci.primitiveRestartEnable = VK_FALSE;
 
-		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
 		VkViewport viewport{};
 		viewport.x = 0;
 		viewport.y = 0;
-		viewport.width = static_cast<float>(loaded_swapchain_extent.width);
-		viewport.height = static_cast<float>(loaded_swapchain_extent.height);
+		viewport.width = static_cast<float>(context.m_swapchain_extent.width);
+		viewport.height = static_cast<float>(context.m_swapchain_extent.height);
 		viewport.minDepth = 0.0F;
 		viewport.maxDepth = 1.0F;
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+		scissor.extent = context.m_swapchain_extent;
 
 		VkPipelineViewportStateCreateInfo viewport_ci{};
 		viewport_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -781,7 +1187,7 @@ struct compute_font
 
 och::err_info run_sdf_font()
 {
-	compute_font program{};
+	sdf_font program{};
 
 	och::err_info err = program.create();
 
