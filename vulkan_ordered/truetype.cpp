@@ -2,8 +2,6 @@
 
 #include <cassert>
 
-#include "och_fmt.h"
-
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 /*///////////////////////////////////////// Big Endian to Little Endian /////////////////////////////////////////*/
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
@@ -287,13 +285,7 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 	m_max_composite_glyph_cnt = be_to_le(maxp_tbl->max_component_elemenents);
 
 	if (const os_2_table_data* os_2_tbl = static_cast<const os_2_table_data*>(get_table("OS/2")))
-	{
-		och::print("ta: {}\ntd: {}\nlg: {}\n", be_to_le(os_2_tbl->typo_ascender), be_to_le(os_2_tbl->typo_descender), be_to_le(os_2_tbl->typo_line_gap));
-
-		constexpr uint32_t off = offsetof(os_2_table_data, typo_ascender);
-
 		m_line_height = static_cast<float>(be_to_le(os_2_tbl->typo_ascender) - be_to_le(os_2_tbl->typo_descender) + be_to_le(os_2_tbl->typo_line_gap)) * m_normalization_factor;
-	}
 	else
 		m_line_height = static_cast<float>(be_to_le(hhea_tbl->ascender) - be_to_le(hhea_tbl->descender) + be_to_le(hhea_tbl->line_gap)) * m_normalization_factor;
 
