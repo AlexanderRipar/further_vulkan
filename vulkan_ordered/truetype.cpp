@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "och_fmt.h"
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 /*///////////////////////////////////////// Big Endian to Little Endian /////////////////////////////////////////*/
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
@@ -235,7 +237,7 @@ uint32_t cmap_f12(const void* raw_tbl, uint32_t cpt) noexcept
 
 
 
-truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail, 0, 0, och::fio::share_read_write_delete }
+truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail, 0, 0, och::fio::share::read_write_delete }
 {
 	m_flags.is_valid_file = false;
 
@@ -285,7 +287,13 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 	m_max_composite_glyph_cnt = be_to_le(maxp_tbl->max_component_elemenents);
 
 	if (const os_2_table_data* os_2_tbl = static_cast<const os_2_table_data*>(get_table("OS/2")))
+	{
+		och::print("ta: {}\ntd: {}\nlg: {}\n", be_to_le(os_2_tbl->typo_ascender), be_to_le(os_2_tbl->typo_descender), be_to_le(os_2_tbl->typo_line_gap));
+
+		constexpr uint32_t off = offsetof(os_2_table_data, typo_ascender);
+
 		m_line_height = static_cast<float>(be_to_le(os_2_tbl->typo_ascender) - be_to_le(os_2_tbl->typo_descender) + be_to_le(os_2_tbl->typo_line_gap)) * m_normalization_factor;
+	}
 	else
 		m_line_height = static_cast<float>(be_to_le(hhea_tbl->ascender) - be_to_le(hhea_tbl->descender) + be_to_le(hhea_tbl->line_gap)) * m_normalization_factor;
 

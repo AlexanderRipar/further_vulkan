@@ -194,6 +194,7 @@ private:
 		uint16_t num_tables;
 	};
 
+	#pragma pack(push, 1)
 	struct os_2_table_data
 	{
 		uint16_t version;
@@ -209,6 +210,7 @@ private:
 		int16_t y_superscript_y_size;
 		int16_t y_superscript_x_offset;
 		int16_t y_superscript_y_offset;
+		int16_t y_strikeout_size;
 		int16_t y_strikeout_position;
 		int16_t family_class;
 		uint8_t panose[10];
@@ -235,6 +237,7 @@ private:
 		uint16_t lower_optical_point_size;
 		uint16_t upper_optical_point_size;
 	};
+#pragma pack(pop)
 
 
 
