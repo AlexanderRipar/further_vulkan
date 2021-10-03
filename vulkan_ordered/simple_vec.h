@@ -18,7 +18,7 @@ private:
 
 public:
 
-	simple_vec(uint32_t initial_capacity) noexcept : m_data{ static_cast<T*>(malloc(och::next_pow2(initial_capacity) * sizeof(T))) }, m_size{ 0 }, m_capacity{ och::next_pow2(initial_capacity) } {}
+	simple_vec(uint32_t initial_capacity) noexcept : m_data{ initial_capacity ? static_cast<T*>(malloc(och::next_pow2(initial_capacity) * sizeof(T))) : nullptr }, m_size{ 0 }, m_capacity{ och::next_pow2(initial_capacity) } {}
 
 	~simple_vec() noexcept { free(m_data); }
 
@@ -56,7 +56,7 @@ public:
 		return m_capacity;
 	}
 
-	void reserve(uint32_t min_capacity) const noexcept
+	void reserve(uint32_t min_capacity) noexcept
 	{
 		assert_capacity(min_capacity);
 	}
@@ -96,15 +96,26 @@ public:
 		return m_data;
 	}
 
+	void remove(const uint32_t idx) noexcept
+	{
+		for (uint32_t i = idx + 1; i < m_size; ++i)
+			m_data[i - 1] = m_data[i];
+
+		m_size -= 1;
+	}
+
 private:
 
 	void assert_capacity(uint32_t requested) noexcept
 	{
-		if (requested < m_capacity)
+		if (requested > m_capacity)
 		{
 			m_capacity = och::next_pow2(requested);
 
-			m_data = static_cast<T*>(realloc(m_data, m_capacity));
+			if (m_data)
+				m_data = static_cast<T*>(realloc(m_data, m_capacity * sizeof(T)));
+			else
+				m_data = static_cast<T*>(malloc(m_capacity * sizeof(T)));
 		}
 	}
 };
