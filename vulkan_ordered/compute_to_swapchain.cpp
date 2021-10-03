@@ -393,10 +393,8 @@ struct compute_image_to_swapchain
 
 		vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 
-		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
-		uint32_t groups_x = (loaded_swapchain_extent.width + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
-		uint32_t groups_y = (loaded_swapchain_extent.height + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
+		uint32_t groups_x = (context.m_swapchain_extent.width + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
+		uint32_t groups_y = (context.m_swapchain_extent.height + MAX_FRAMES_INFLIGHT - 1) / MAX_FRAMES_INFLIGHT;
 
 		vkCmdDispatch(command_buffer, groups_x, groups_y, 1);
 

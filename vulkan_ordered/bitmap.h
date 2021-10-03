@@ -89,8 +89,8 @@ public:
 
 	using point_op_fn = texel_b8g8r8(*) (texel_b8g8r8) noexcept;
 
-	bitmap_file(const char* filename, uint32_t existing_mode = och::fio::open_normal, uint32_t new_width = 0, uint32_t new_height = 0) :
-		m_file{ och::mapped_file<bitmap_header>(filename, och::fio::access_readwrite, existing_mode, new_width && new_height ? och::fio::open_normal : och::fio::open_fail, new_width && new_height ? bitmap_header::stride(new_width) * new_height + image_data_offset : 0) },
+	bitmap_file(const char* filename, och::fio::open existing_mode = och::fio::open::normal, uint32_t new_width = 0, uint32_t new_height = 0) :
+		m_file{ och::mapped_file<bitmap_header>(filename, och::fio::access::readwrite, existing_mode, new_width && new_height ? och::fio::open::normal : och::fio::open::fail, new_width && new_height ? bitmap_header::stride(new_width) * new_height + image_data_offset : 0) },
 		m_image_data{ m_file ? m_file[0].image_offset ? m_file[0].raw_image_data() : reinterpret_cast<uint8_t*>(m_file.data()) + image_data_offset : nullptr },
 		m_stride{ m_file ? m_file[0].image_offset ? bitmap_header::stride(m_file[0].width) : bitmap_header::stride(new_width) : 0 },
 		m_width{ m_file ? m_file[0].image_offset ? m_file[0].width : new_width : 0 },

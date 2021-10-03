@@ -28,9 +28,6 @@
     <Filter Include="samples\compute_to_swapchain">
       <UniqueIdentifier>{9efec8c9-34a1-414f-b638-a2ccdf0e6d2f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="samples\font">
-      <UniqueIdentifier>{d4937fdd-d47d-440f-8e39-a753616f75d2}</UniqueIdentifier>
-    </Filter>
     <Filter Include="extend_io">
       <UniqueIdentifier>{aabdcde1-39a4-4fbb-a1e1-6675404b5b86}</UniqueIdentifier>
     </Filter>
@@ -39,6 +36,9 @@
     </Filter>
     <Filter Include="error_handling">
       <UniqueIdentifier>{32dd45b5-8605-4dbd-bd87-684761503274}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\sdf_font">
+      <UniqueIdentifier>{d4937fdd-d47d-440f-8e39-a753616f75d2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -67,7 +67,7 @@
       <Filter>samples\compute_to_swapchain</Filter>
     </ClCompile>
     <ClCompile Include="sdf_font.cpp">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </ClCompile>
     <ClCompile Include="truetype.cpp">
       <Filter>extend_io</Filter>
@@ -129,7 +129,7 @@
       <Filter>samples\compute_to_swapchain</Filter>
     </ClInclude>
     <ClInclude Include="sdf_font.h">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </ClInclude>
     <ClInclude Include="tiny_obj_loader.h">
       <Filter>samples\vulkan_tutorial</Filter>
@@ -200,16 +200,16 @@
       <Filter>samples\compute_buffer_copy</Filter>
     </None>
     <None Include="shaders\sdf_font.vert">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </None>
     <None Include="shaders\sdf_font.vert.spv">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </None>
     <None Include="shaders\sdf_font.frag">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </None>
     <None Include="shaders\sdf_font.frag.spv">
-      <Filter>samples\font</Filter>
+      <Filter>samples\sdf_font</Filter>
     </None>
   </ItemGroup>
 </Project>

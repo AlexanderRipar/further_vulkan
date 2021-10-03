@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-
 #include <cstdlib>
+#include <cstring>
 
 #include "och_error_handling.h"
 
@@ -54,7 +54,7 @@ public:
 
 	och::err_info load_bim(const char* filename) noexcept
 	{
-		och::mapped_file file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+		och::mapped_file file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
 
 		if (!file)
 			return MSG_ERROR("Could not open file");
@@ -77,7 +77,7 @@ public:
 
 	och::err_info save_bmp(const char* filename, texel_b8g8r8 set_colour = col::b8g8r8::white, texel_b8g8r8 unset_colour = col::b8g8r8::black, bool overwrite_existing_file = false) noexcept
 	{
-		bitmap_file file(filename, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, m_width, m_height);
+		bitmap_file file(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height);
 
 		if (!file)
 			return MSG_ERROR("Could not open file");
@@ -91,7 +91,7 @@ public:
 
 	och::err_info save_bim(const char* filename, bool overwrite_existing_file = false)
 	{
-		och::mapped_file file(filename, och::fio::access_readwrite, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, och::fio::open_normal, m_stride * m_height + 8);
+		och::mapped_file file(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, m_stride * m_height + 8);
 
 		if (!file)
 			return MSG_ERROR("Could not open file");

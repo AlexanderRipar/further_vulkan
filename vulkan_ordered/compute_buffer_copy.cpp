@@ -5,6 +5,7 @@
 #include "och_timer.h"
 #include "och_fmt.h"
 #include "och_fio.h"
+#include "och_helpers.h"
 
 struct simple_compute_buffer_copy
 {

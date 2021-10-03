@@ -95,6 +95,7 @@
       <AdditionalIncludeDirectories>C:\VulkanSDK\1.2.176.1\Include;C:\Users\alex_2\Documents\_Programming\libraries\glfw-3.3.4.bin.WIN64\include;C:\Users\alex_2\source\repos\och_lib\och_lib;C:\Users\alex_2\Documents\_Programming\libraries\glm\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <DisableSpecificWarnings>5105;26812;4201</DisableSpecificWarnings>
+      <PreprocessToFile>false</PreprocessToFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,6 +129,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DisableSpecificWarnings>5105;26812;4201</DisableSpecificWarnings>
+      <PreprocessToFile>false</PreprocessToFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -160,6 +162,7 @@
       <AdditionalIncludeDirectories>C:\VulkanSDK\1.2.176.1\Include;C:\Users\alex_2\Documents\_Programming\libraries\glfw-3.3.4.bin.WIN64\include;C:\Users\alex_2\source\repos\och_lib\och_lib;C:\Users\alex_2\Documents\_Programming\libraries\glm\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <DisableSpecificWarnings>5105;26812;4201</DisableSpecificWarnings>
+      <PreprocessToFile>false</PreprocessToFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -193,6 +196,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DisableSpecificWarnings>5105;26812;4201</DisableSpecificWarnings>
+      <PreprocessToFile>false</PreprocessToFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

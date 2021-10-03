@@ -9,11 +9,11 @@
 
 #include "bitmap.h"
 #include "och_timer.h"
-#include "och_fmt.h"
 #include "och_fio.h"
 #include "och_vulkan_base.h"
 #include "och_error_handling.h"
 #include "och_matmath.h"
+#include "och_fmt.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -375,19 +375,17 @@ struct vulkan_tutorial
 		input_asm_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		input_asm_info.primitiveRestartEnable = VK_FALSE;
 
-		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
 		VkViewport viewport{};
 		viewport.x = 0.0F;
 		viewport.y = 0.0F;
-		viewport.width = static_cast<float>(loaded_swapchain_extent.width);
-		viewport.height = static_cast<float>(loaded_swapchain_extent.height);
+		viewport.width = static_cast<float>(context.m_swapchain_extent.width);
+		viewport.height = static_cast<float>(context.m_swapchain_extent.height);
 		viewport.minDepth = 0.0F;
 		viewport.maxDepth = 1.0F;
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+		scissor.extent = context.m_swapchain_extent;
 
 		VkPipelineViewportStateCreateInfo view_info{};
 		view_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -498,9 +496,7 @@ struct vulkan_tutorial
 
 	och::err_info create_vk_depth_resources()
 	{
-		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
-		check(allocate_image(loaded_swapchain_extent.width, loaded_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
+		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
 
 		check(allocate_image_view(vk_depth_image, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, vk_depth_image_view));
 
@@ -517,15 +513,13 @@ struct vulkan_tutorial
 		{
 			VkImageView attachments[]{ context.m_swapchain_image_views[i], vk_depth_image_view };
 
-			VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
 			VkFramebufferCreateInfo create_info{};
 			create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 			create_info.renderPass = vk_render_pass;
 			create_info.attachmentCount = static_cast<uint32_t>(sizeof(attachments) / sizeof(*attachments));
 			create_info.pAttachments = attachments;
-			create_info.width = loaded_swapchain_extent.width;
-			create_info.height = loaded_swapchain_extent.height;
+			create_info.width = context.m_swapchain_extent.width;
+			create_info.height = context.m_swapchain_extent.height;
 			create_info.layers = 1;
 
 			check(vkCreateFramebuffer(context.m_device, &create_info, nullptr, &vk_swapchain_framebuffers[i]));
@@ -536,7 +530,7 @@ struct vulkan_tutorial
 
 	och::err_info create_vk_texture_image()
 	{
-		och::mapped_file<bitmap_header> texture_file(och::stringview("textures/" OCH_ASSET_NAME ".bmp"), och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+		och::mapped_file<bitmap_header> texture_file(och::stringview("textures/" OCH_ASSET_NAME ".bmp"), och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
 
 		if (!texture_file)
 			return MAKE_ERROR(1);
@@ -866,7 +860,7 @@ struct vulkan_tutorial
 			pass_beg_info.renderPass = vk_render_pass;
 			pass_beg_info.framebuffer = vk_swapchain_framebuffers[i];
 			pass_beg_info.renderArea.offset = { 0, 0 };
-			pass_beg_info.renderArea.extent = context.m_swapchain_extent.load(std::memory_order::acquire);
+			pass_beg_info.renderArea.extent = context.m_swapchain_extent;
 			pass_beg_info.clearValueCount = static_cast<uint32_t>(sizeof(clear_values) / sizeof(*clear_values));
 			pass_beg_info.pClearValues = clear_values;
 
@@ -1074,7 +1068,7 @@ struct vulkan_tutorial
 
 	och::err_info create_shader_module_from_file(const char* filename, VkShaderModule& out_shader_module)
 	{
-		och::mapped_file<uint8_t> shader_file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+		och::mapped_file<uint8_t> shader_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
 	
 		if (!shader_file)
 			return MAKE_ERROR(1);
@@ -1426,10 +1420,8 @@ struct vulkan_tutorial
 	
 		uniform_buffer_obj ubo;
 	
-		VkExtent2D loaded_swapchain_extent = context.m_swapchain_extent.load(std::memory_order::acquire);
-
 		ubo.transform =
-			och::perspective(0.785398F, static_cast<float>(loaded_swapchain_extent.width) / loaded_swapchain_extent.height, 0.1F, 10.0F) *
+			och::perspective(0.785398F, static_cast<float>(context.m_swapchain_extent.width) / context.m_swapchain_extent.height, 0.1F, 10.0F) *
 			och::look_at(och::vec3(2.0F), och::vec3(0.0F), och::vec3(0.0F, 0.0F, 1.0F)) *
 			och::mat4::rotate_z(seconds * 0.785398F);
 	
@@ -1481,7 +1473,7 @@ struct vulkan_tutorial
 
 och::err_info run_vulkan_tutorial() noexcept
 {
-	vulkan_tutorial program;
+	vulkan_tutorial program{};
 
 	check(program.run());
 
