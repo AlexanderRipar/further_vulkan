@@ -21,13 +21,15 @@ public:
 
 	struct glyph_index
 	{
-		och::vec2 position;
+		och::vec2 atlas_position;
 
-		och::vec2 size;
+		och::vec2 atlas_extent;
 
-		och::vec2 bearing;
+		och::vec2 real_extent;
 
-		float advance;
+		och::vec2 real_bearing;
+
+		float real_advance;
 	};
 
 private:
@@ -43,6 +45,8 @@ private:
 	{
 		uint32_t m_width;
 		uint32_t m_height;
+		float m_line_height;
+		uint32_t m_glyph_scale;
 		uint32_t m_map_ranges_size;
 		uint32_t m_map_indices_size;
 
@@ -87,6 +91,10 @@ private:
 
 	uint32_t m_height = 0;
 
+	uint32_t m_glyph_scale = 0;
+
+	float m_line_height = 0.0F;
+
 	och::heap_buffer<uint8_t> m_image;
 
 	och::heap_buffer<mapper_range> m_map_ranges;
@@ -122,6 +130,10 @@ public:
 
 		if (!file)
 			return MSG_ERROR("Could not open file");
+
+		m_line_height = file.line_height();
+
+		m_glyph_scale = glyph_size;
 
 		uint32_t codept_cnt = 0;
 
@@ -309,7 +321,7 @@ public:
 					{
 						uint8_t v = sdf_buffer[a.buffer_begin + x + y * padded_glyph_size];
 
-						m_image[a.x + x + glyph_padding_pixels + (a.y + glyph_padding_pixels + y) * m_width] = v;
+						m_image[a.x + x + glyph_padding_pixels + (a.h + a.y + glyph_padding_pixels - y - 1) * m_width] = v;
 					}
 		}
 
@@ -363,15 +375,48 @@ public:
 
 		m_map_indices.allocate(cp_ids.size() + 1);
 
-		m_map_indices[0] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, 0.0F };
+		//m_map_indices[0] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, 0.0F };
 
 		// Generate codepoint indices
 		{
 			sort<offsetof(glyph_address, glyph_id), 4>(addresses);
 
-			const float inv_width = 1.0F / static_cast<float>(m_width);
+			const float inv_width = 1.0F / m_width;
 
-			const float inv_height = 1.0F / static_cast<float>(m_height);
+			const float inv_height = 1.0F / m_height;
+
+			const float inv_scale = 1.0F / m_glyph_scale;
+
+			// Set first map index to missing-character glyph
+			{
+				const glyph_address& a = addresses[0];
+
+				glyph_metrics mtx = file.get_glyph_metrics_from_id(0);
+
+				const float atlas_pos_x = a.x * inv_width;
+
+				const float atlas_pos_y = a.y * inv_height;
+
+				const float atlas_ext_x = a.w * inv_width;
+
+				const float atlas_ext_y = a.h * inv_height;
+
+				const float real_ext_x = a.w * inv_scale;
+
+				const float real_ext_y = a.h * inv_scale;
+
+				const float real_bearing_x = mtx.left_side_bearing();
+
+				const float real_bearing_y = 1.0F - mtx.y_size() - (mtx.y_min() - file.baseline_offset());
+
+				const float real_advance = mtx.advance_width();
+
+				m_map_indices[0].atlas_position = { atlas_pos_x   , atlas_pos_y    };
+				m_map_indices[0].atlas_extent   = { atlas_ext_x   , atlas_ext_y    }; 
+				m_map_indices[0].real_extent    = { real_ext_x    , real_ext_y     };
+				m_map_indices[0].real_bearing   = { real_bearing_x, real_bearing_y };
+				m_map_indices[0].real_advance   = real_advance;
+			}
 
 			for (uint32_t i = 0; i != cp_ids.size(); ++i)
 			{
@@ -390,23 +435,31 @@ public:
 						{
 							const glyph_address& a = addresses[static_cast<uint32_t>(mid)];
 
-							const float position_x = static_cast<float>(a.x) * inv_width;
-
-							const float position_y = static_cast<float>(a.y) * inv_height;
-
-							const float size_x = static_cast<float>(a.w) * inv_width;
-
-							const float size_y = static_cast<float>(a.h) * inv_height;
-
 							glyph_metrics mtx = file.get_glyph_metrics_from_id(curr_id);
 
-							const float bearing_x = mtx.left_side_bearing() * glyph_size * inv_width;
+							const float atlas_pos_x = a.x * inv_width;
 
-							const float bearing_y = (mtx.y_min() - file.baseline_offset()) * glyph_size * inv_height;
+							const float atlas_pos_y = a.y * inv_height;
 
-							const float advance = mtx.advance_width() * glyph_size * inv_width;
+							const float atlas_ext_x = a.w * inv_width;
 
-							m_map_indices[i + 1] = { {position_x, position_y}, {size_x, size_y}, {bearing_x, bearing_y}, advance };
+							const float atlas_ext_y = a.h * inv_height;
+
+							const float real_ext_x = a.w * inv_scale;
+
+							const float real_ext_y = a.h * inv_scale;
+
+							const float real_bearing_x = mtx.left_side_bearing();
+
+							const float real_bearing_y = 1.0F - mtx.y_size() - (mtx.y_min() - file.baseline_offset());
+
+							const float real_advance = mtx.advance_width();
+
+							m_map_indices[i + 1].atlas_position = { atlas_pos_x   , atlas_pos_y    };
+							m_map_indices[i + 1].atlas_extent   = { atlas_ext_x   , atlas_ext_y    }; 
+							m_map_indices[i + 1].real_extent    = { real_ext_x    , real_ext_y     };
+							m_map_indices[i + 1].real_bearing   = { real_bearing_x, real_bearing_y };
+							m_map_indices[i + 1].real_advance   = real_advance;
 
 							break;
 						}
@@ -420,9 +473,9 @@ public:
 					{
 						glyph_metrics mtx = file.get_glyph_metrics_from_id(curr_id);
 
-						const float advance = mtx.advance_width() * glyph_size * inv_width;
+						const float advance = mtx.advance_width();
 
-						m_map_indices[i + 1] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, advance };
+						m_map_indices[i + 1] = { {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, advance };
 					}
 				}
 			}
@@ -444,11 +497,11 @@ public:
 
 		const uint32_t map_indices_bytes = m_map_indices.size() * sizeof(*m_map_indices.data());
 
-		const uint32_t metadata_bytes = 16;
+		const uint32_t metadata_bytes = sizeof(glyph_atlas::fileheader);
 
 		const uint32_t total_file_bytes = image_bytes + map_ranges_bytes + map_indices_bytes + metadata_bytes;
 
-		och::mapped_file<glyph_atlas::fileheader> output_file(filename, och::fio::access_readwrite, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, och::fio::open_normal, total_file_bytes);
+		och::mapped_file<glyph_atlas::fileheader> output_file(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, total_file_bytes);
 
 		if (!output_file)
 			return MSG_ERROR("Could not open file");
@@ -460,6 +513,10 @@ public:
 		hdr.m_width = m_width;
 
 		hdr.m_height = m_height;
+
+		hdr.m_line_height = m_line_height;
+
+		hdr.m_glyph_scale = m_glyph_scale;
 
 		hdr.m_map_ranges_size = m_map_ranges.size();
 
@@ -476,7 +533,7 @@ public:
 
 	och::err_info load_glfatl(const char* filename) noexcept
 	{
-		const och::mapped_file<const glyph_atlas::fileheader> input_file(filename, och::fio::access_read, och::fio::open_normal, och::fio::open_fail);
+		const och::mapped_file<const glyph_atlas::fileheader> input_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
 
 		if (!input_file)
 			return MSG_ERROR("Could not open file");
@@ -486,6 +543,10 @@ public:
 		m_width = hdr.m_width;
 		
 		m_height = hdr.m_height;
+
+		m_line_height = hdr.m_line_height;
+
+		m_glyph_scale = hdr.m_glyph_scale;
 
 		m_map_ranges.allocate(hdr.m_map_ranges_size);
 
@@ -504,7 +565,7 @@ public:
 
 	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false) const noexcept
 	{
-		bitmap_file file(filename, overwrite_existing_file ? och::fio::open_truncate : och::fio::open_fail, m_width, m_height);
+		bitmap_file file(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height);
 
 		if (!file)
 			return MSG_ERROR("Could not open file");
@@ -512,7 +573,7 @@ public:
 		for (uint32_t y = 0; y != m_height; ++y)
 			for (uint32_t x = 0; x != m_width; ++x)
 			{
-				uint8_t v = m_image[x + y * m_width];
+				uint8_t v = m_image[x + (m_height - 1 - y) * m_width];
 
 				file(x, y) = { v, v, v };
 			}
@@ -520,9 +581,13 @@ public:
 		return {};
 	}
 
+	float line_height() const noexcept { return m_line_height; }
+
 	uint32_t width() const noexcept { return m_width; }
 
 	uint32_t height() const noexcept { return m_height; }
+
+	uint32_t glyph_scale() const noexcept { return m_glyph_scale; }
 
 	uint8_t* data() noexcept { return m_image.data(); }
 
