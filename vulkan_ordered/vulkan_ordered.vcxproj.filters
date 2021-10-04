@@ -71,6 +71,9 @@
     <ClCompile Include="..\..\och_lib\och_lib\och_err.cpp">
       <Filter>och_lib</Filter>
     </ClCompile>
+    <ClCompile Include="sdf_glyph_atlas.cpp">
+      <Filter>helpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h">
@@ -122,9 +125,6 @@
       <Filter>samples\vulkan_tutorial</Filter>
     </ClInclude>
     <ClInclude Include="texels.h">
-      <Filter>helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="sdf_image.h">
       <Filter>helpers</Filter>
     </ClInclude>
     <ClInclude Include="truetype.h">

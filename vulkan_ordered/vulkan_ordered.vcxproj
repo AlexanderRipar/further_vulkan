@@ -230,6 +230,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="compute_to_swapchain.cpp" />
     <ClCompile Include="compute_buffer_copy.cpp" />
+    <ClCompile Include="sdf_glyph_atlas.cpp" />
     <ClCompile Include="vulkan_base.cpp" />
     <ClCompile Include="truetype.cpp" />
     <ClCompile Include="vulkan_tutorial.cpp" />
@@ -258,7 +259,6 @@
     <ClInclude Include="compute_buffer_copy.h" />
     <ClInclude Include="compute_to_swapchain.h" />
     <ClInclude Include="vulkan_base.h" />
-    <ClInclude Include="sdf_image.h" />
     <ClInclude Include="vulkan_tutorial.h" />
     <ClInclude Include="tiny_obj_loader.h" />
   </ItemGroup>

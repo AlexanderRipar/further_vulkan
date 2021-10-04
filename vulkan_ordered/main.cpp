@@ -14,9 +14,9 @@
 
 
 
-#include "sdf_image.h"
-
 #include "truetype.h"
+
+#include "bitmap.h"
 
 #include "sdf_glyph_atlas.h"
 
@@ -39,31 +39,13 @@ och::status font_testing() noexcept
 	const char* ttf_filename = "C:/Windows/Fonts/" FONT_NAME ".ttf"; // "C:/Windows/Fonts/consola.ttf";
 	const char* glfatl_filename = "C:/Users/alex_2/source/repos/vulkan_ordered/vulkan_ordered/textures/" FONT_NAME ".glfatl";
 
-	{
-		truetype_file ttf_file;
-		
-		check(ttf_file.create(ttf_filename));
-
-		glyph_data glf = ttf_file.get_glyph_data_from_codepoint('y');
-
-		sdf_image img;
-
-		img.from_glyph(glf, 64, 64, 0.75F);
-
-		img.save_bmp("C:/Users/alex_2/source/repos/vulkan_ordered/vulkan_ordered/textures/glyph_sdf.bmp", true, sdf_image::colour_mapper::nonlinear_distance);
-
-		och::print("width: {}\nheight: {}\n", glf.metrics().x_size(), glf.metrics().y_size());
-	}
-
-
-
 	glyph_atlas atlas;
 
 	if (atlas.load_glfatl(glfatl_filename))
 	{
 		och::print("Could not find existing glyph atlas \"{}\".\nCreating new file from \"{}\".\n", glfatl_filename, ttf_filename);
 
-		codept_range ranges[1]{ {32, 95} };
+		glyph_atlas::codept_range ranges[1]{ {32, 95} };
 
 		constexpr float clamp = 0.015625F * 2.0F;
 
