@@ -305,7 +305,7 @@ public:
 		
 			m_width = map_width;
 
-			m_height = och::max(curr_y, 1u);
+			m_height = curr_y >= 1u ? curr_y : 1u;
 		
 			m_image.allocate(m_width * m_height);
 

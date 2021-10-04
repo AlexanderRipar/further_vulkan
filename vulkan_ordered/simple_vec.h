@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <cstdlib>
 
-#include "och_helpers.h"
-
 template<typename T>
 struct simple_vec
 {
@@ -18,7 +16,7 @@ private:
 
 public:
 
-	simple_vec(uint32_t initial_capacity) noexcept : m_data{ initial_capacity ? static_cast<T*>(malloc(och::next_pow2(initial_capacity) * sizeof(T))) : nullptr }, m_size{ 0 }, m_capacity{ och::next_pow2(initial_capacity) } {}
+	simple_vec(uint32_t initial_capacity) noexcept : m_data{ initial_capacity ? static_cast<T*>(malloc(next_pow2(initial_capacity) * sizeof(T))) : nullptr }, m_size{ 0 }, m_capacity{ next_pow2(initial_capacity) } {}
 
 	~simple_vec() noexcept { free(m_data); }
 
@@ -110,12 +108,25 @@ private:
 	{
 		if (requested > m_capacity)
 		{
-			m_capacity = och::next_pow2(requested);
+			m_capacity = next_pow2(requested);
 
 			if (m_data)
 				m_data = static_cast<T*>(realloc(m_data, m_capacity * sizeof(T)));
 			else
 				m_data = static_cast<T*>(malloc(m_capacity * sizeof(T)));
 		}
+	}
+
+	uint32_t next_pow2(uint32_t n)
+	{
+		n -= 1;
+
+		n |= n >> 1;
+		n |= n >> 2;
+		n |= n >> 4;
+		n |= n >> 8;
+		n |= n >> 16;
+
+		return n + 1;
 	}
 };

@@ -5,7 +5,6 @@
 #include "och_timer.h"
 #include "och_fmt.h"
 #include "och_fio.h"
-#include "och_helpers.h"
 
 struct simple_compute_buffer_copy
 {
@@ -82,7 +81,7 @@ struct simple_compute_buffer_copy
 
 				src_offset = 0;
 
-				dst_offset = och::max(BUFFER_BYTES, mem_reqs.alignment);
+				dst_offset = BUFFER_BYTES > mem_reqs.alignment ? BUFFER_BYTES : mem_reqs.alignment;
 
 				VkMemoryAllocateInfo alloc_info{};
 				alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;

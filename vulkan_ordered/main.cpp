@@ -2,8 +2,6 @@
 
 #include "och_err.h"
 
-#include "och_helpers.h"
-
 
 
 #include "vulkan_tutorial.h"

@@ -256,7 +256,6 @@
     <ClInclude Include="texels.h" />
     <ClInclude Include="sdf_font.h" />
     <ClInclude Include="heap_buffer.h" />
-    <ClInclude Include="och_helpers.h" />
     <ClInclude Include="compute_buffer_copy.h" />
     <ClInclude Include="compute_to_swapchain.h" />
     <ClInclude Include="vulkan_base.h" />

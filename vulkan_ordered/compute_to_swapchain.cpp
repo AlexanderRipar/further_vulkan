@@ -5,7 +5,6 @@
 #include "vulkan_base.h"
 #include "och_fmt.h"
 #include "och_matmath.h"
-#include "och_helpers.h"
 #include "heap_buffer.h"
 
 #define USE_SIMPLEX

@@ -18,6 +18,68 @@
 
 #include "image_view.h"
 
+static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
+{
+	constexpr float TOO_SMALL = 1e-7F;
+
+	constexpr float PI = 3.14159265359F;
+
+	a2 /= a3;
+
+	a1 /= a3;
+
+	a0 /= a3;
+
+	const float q = (3.0F * a1 - (a2 * a2)) / 9.0F;
+
+	const float r = (-27.0F * a0 + a2 * (9.0F * a1 - 2.0F * a2 * a2)) / 54.0F;
+
+	const float disc = q * q * q + r * r;
+
+	const float term_1 = -a2 / 3.0F;
+
+	if (disc > TOO_SMALL)
+	{
+		const float disc_sqrt = sqrtf(disc);
+
+		float s = r + disc_sqrt;
+
+		s = s < 0.0F ? -cbrtf(-s) : cbrtf(s);
+
+		float t = r - disc_sqrt;
+
+		t = t < 0.0F ? -cbrtf(-t) : cbrtf(t);
+
+		r0 = term_1 + s + t;
+
+		r1 = INFINITY;
+
+		r2 = INFINITY;
+	}
+	else if (disc < -TOO_SMALL)
+	{
+		const float dummy = acosf(r / sqrtf(-q * q * q));
+
+		const float r13 = 2.0F * sqrtf(-q);
+
+		r0 = term_1 + r13 * cosf(dummy / 3.0F);
+
+		r1 = term_1 + r13 * cosf((dummy + 2.0F * PI) / 3.0F);
+
+		r2 = term_1 + r13 * cosf((dummy + 4.0F * PI) / 3.0F);
+	}
+	else
+	{
+		const float r13 = r < 0.0F ? -cbrtf(-r) : cbrtf(r);
+
+		r0 = term_1 + 2.0F * r13;
+
+		r1 = term_1 - r13;
+
+		r2 = INFINITY;
+	}
+}
+
 __forceinline och::vec2 bezier_interp(och::vec2 p0, och::vec2 p1, och::vec2 p2, float t) noexcept
 {
 	return (1.0F - t) * (1.0F - t) * p0 + 2.0F * (1.0F - t) * t * p1 + t * t * p2;
@@ -115,11 +177,11 @@ __forceinline bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec
 	och::vec2 min_p;
 
 
-	if (och::abs(a3) > 1e-7F)
+	if (fabs(a3) > 1e-7F)
 	{
 		float r0, r1, r2;
 
-		och::cubic_poly_roots(a3, a2, a1, a0, r0, r1, r2);
+		cubic_poly_roots(a3, a2, a1, a0, r0, r1, r2);
 
 		check_roots(r0, r1, r2, p0, p1, p2, p, min_dst_sq, min_t, min_p);
 	}
@@ -141,7 +203,7 @@ __forceinline bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec
 	{
 		const och::vec2 deriv = 2.0F * min_t * (p2 - 2.0F * p1 + p0) + 2.0F * (p1 - p0); // 2.0F * (min_t * (p0 - 2.0F * p1 + p2) + p1 - p0);
 
-		const float orthogonality = och::abs(och::cross(och::normalize(deriv), och::normalize(p - min_p)));
+		const float orthogonality = fabs(och::cross(och::normalize(deriv), och::normalize(p - min_p)));
 
 		if (min_dst_sq + 1e-7F < global_min_dst_sq || global_min_dst_max_orthogonality < orthogonality)
 		{

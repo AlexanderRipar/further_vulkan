@@ -1,7 +1,6 @@
 #include "vulkan_base.h"
 
 #include "heap_buffer.h"
-#include "och_helpers.h"
 #include "och_fmt.h"
 #include "och_fio.h"
 
@@ -428,17 +427,19 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 				VkQueueFlags flags = family_properties[f].queueFlags;
 
-				if (och::contains_all(flags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) && supports_present)
+				if (uint32_t general_mask = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT; (flags & general_mask) == general_mask && supports_present)
 					general_queue_index = f;
-				else if (och::contains_all(flags, VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT) && och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT))
+				else if (uint32_t compute_mask = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT; (flags & compute_mask) == compute_mask)
 					compute_queue_index = f;
-				else if (och::contains_all(flags, VK_QUEUE_TRANSFER_BIT) && och::contains_none(flags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+				else if ((flags & VK_QUEUE_TRANSFER_BIT) && !(flags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)))
 					transfer_queue_index = f;
 			}
 
 			if (compute_queue_index == VK_QUEUE_FAMILY_IGNORED)
 			{
-				if (allow_compute_graphics_merge && general_queue_index != VK_QUEUE_FAMILY_IGNORED && requested_general_queues + requested_compute_queues <= och::min(queue_family_info::MAX_QUEUE_CNT, family_properties[general_queue_index].queueCount))
+				const uint32_t supported_queue_cnt = queue_family_info::MAX_QUEUE_CNT < family_properties[general_queue_index].queueCount ? queue_family_info::MAX_QUEUE_CNT : family_properties[general_queue_index].queueCount;
+
+				if (allow_compute_graphics_merge && general_queue_index != VK_QUEUE_FAMILY_IGNORED && requested_general_queues + requested_compute_queues <= supported_queue_cnt)
 				{
 					compute_queue_index = general_queue_index;
 
@@ -855,7 +856,7 @@ och::status vulkan_context::recreate_swapchain() noexcept
 och::status vulkan_context::suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept
 {
 	for (uint32_t i = 0; i != m_memory_properties.memoryTypeCount; ++i)
-		if ((memory_type_mask & (1 << i)) && och::contains_all(m_memory_properties.memoryTypes[i].propertyFlags, property_flags))
+		if ((memory_type_mask & (1 << i)) && (m_memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags)
 		{
 			out_memory_type_idx = i;
 

@@ -4,7 +4,6 @@
 
 #include "vulkan_base.h"
 #include "heap_buffer.h"
-#include "och_helpers.h"
 #include "och_matmath.h"
 #include "och_timer.h"
 
