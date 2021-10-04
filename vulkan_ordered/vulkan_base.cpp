@@ -1110,16 +1110,11 @@ void vulkan_context::check_input_events(och::vk changing_keycode, key_event chan
 
 void vulkan_context::set_keycode(och::vk keycode) noexcept
 {
-	// if (!(m_pressed_keycodes[keycode >> 6] & (1ull << (keycode & 63))))
-	// 	och::print("HI {}\n", och::vk::vk_names[keycode]);
-
 	m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] |= 1ull << (static_cast<uint8_t>(keycode) & 63);
 }
 
 void vulkan_context::unset_keycode(och::vk keycode) noexcept
 {
-	// och::print("LO {}\n", och::vk::vk_names[keycode]);
-
 	m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] &= ~(1ull << (static_cast<uint8_t>(keycode) & 63));
 }
 

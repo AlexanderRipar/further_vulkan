@@ -12,8 +12,6 @@
 
 #include "bitmap.h"
 
-#include "binary_image.h"
-
 #include "truetype.h"
 
 #include "image_view.h"
@@ -446,60 +444,6 @@ public:
 		}
 	};
 
-	och::status from_bim(const binary_image& img)
-	{
-		constexpr point INSIDE = { 0, 0 }, OUTSIDE = { 0x3FFF, 0x3FFF };
-
-		m_width = img.width();
-
-		m_height = img.height();
-
-		m_data = static_cast<float*>(malloc(m_width * m_height * sizeof(float)));
-
-		point* pos = static_cast<point*>(malloc(m_width * m_height * sizeof(point)));
-
-		point* neg = static_cast<point*>(malloc(m_width * m_height * sizeof(point)));
-
-		for (int32_t y = 0; y != m_height; ++y)
-			for (int32_t x = 0; x != m_width; ++x)
-			{
-				if (img.get(x, y))
-				{
-					pos[x + y * m_width] = INSIDE;
-
-					neg[x + y * m_width] = OUTSIDE;
-				}
-				else
-				{
-					pos[x + y * m_width] = OUTSIDE;
-
-					neg[x + y * m_width] = INSIDE;
-				}
-			}
-
-		pass(pos);
-
-		pass(neg);
-
-		const float normalization_fct = 1.0F / sqrtf(static_cast<float>(m_width * m_width + m_height * m_height));
-
-		for (int32_t y = 0; y != m_height; ++y)
-			for (int32_t x = 0; x != m_width; ++x)
-			{
-				float pos_dst = sqrtf(static_cast<float>(pos[x + y * m_width].d_sq()));
-
-				float neg_dst = sqrtf(static_cast<float>(neg[x + y * m_width].d_sq()));
-
-				m_data[x + y * m_width] = (neg_dst - pos_dst) * normalization_fct;
-			}
-
-		free(pos);
-
-		free(neg);
-
-		return {};
-	}
-
 	och::status from_glyph(const glyph_data& glyph, uint32_t image_width, uint32_t image_height, float glyph_scale) noexcept
 	{
 		m_width = image_width;
@@ -567,54 +511,5 @@ public:
 		file.close();
 
 		return {};
-	}
-
-private:
-
-	__forceinline void compare(point* ps, int32_t x, int32_t y, int32_t dx, int32_t dy) noexcept
-	{
-		if (x + dx < 0 || x + dx >= m_width || y + dy < 0 || y + dy >= m_height)
-			return;
-
-
-		point o = ps[x + dx + (y + dy) * m_width];
-
-		o.dx += dx;
-
-		o.dy += dy;
-
-		if (o.d_sq() < ps[x + y * m_width].d_sq())
-			ps[x + y * m_width] = o;
-	}
-
-	void pass(point* ps)
-	{
-		for (int32_t y = 0; y != m_height; ++y)
-		{
-			for (int32_t x = 0; x != m_width; ++x)
-			{
-				compare(ps, x, y, -1, 0);
-				compare(ps, x, y, 0, -1);
-				compare(ps, x, y, -1, -1);
-				compare(ps, x, y, 1, -1);
-			}
-
-			for (int32_t x = m_width - 1; x >= 0; --x)
-				compare(ps, x, y, 1, 0);
-		}
-
-		for (int32_t y = m_height - 1; y >= 0; --y)
-		{
-			for (int32_t x = 0; x != m_width; ++x)
-			{
-				compare(ps, x, y, 1, 0);
-				compare(ps, x, y, 0, 1);
-				compare(ps, x, y, -1, 1);
-				compare(ps, x, y, 1, 1);
-			}
-
-			for (int32_t x = m_width - 1; x >= 0; --x)
-				compare(ps, x, y, -1, 0);
-		}
 	}
 };

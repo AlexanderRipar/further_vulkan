@@ -14,8 +14,6 @@
 
 
 
-#include "binary_image.h"
-
 #include "sdf_image.h"
 
 #include "truetype.h"

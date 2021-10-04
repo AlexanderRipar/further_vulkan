@@ -50,7 +50,7 @@ struct required_feature_list
 {
 	static constexpr uint32_t max_cnt = 8;
 
-	const char* m_inst_extensions[max_cnt]{
+	const char* m_inst_extensions[max_cnt] {
 #ifdef OCH_VALIDATE
 			"VK_EXT_debug_utils",
 #endif // OCH_VALIDATE
@@ -58,8 +58,7 @@ struct required_feature_list
 			"VK_KHR_win32_surface",
 	};
 
-	const char* m_inst_layers[max_cnt]
-	{
+	const char* m_inst_layers[max_cnt] {
 #ifdef OCH_VALIDATE
 			"VK_LAYER_KHRONOS_validation",
 #endif // OCH_VALIDATE
@@ -75,13 +74,11 @@ struct required_feature_list
 	uint32_t instance_layer_cnt = 0;
 #endif // OCH_VALIDATE
 
-	const char* m_dev_extensions[max_cnt]
-	{
+	const char* m_dev_extensions[max_cnt] {
 		"VK_KHR_swapchain",
 	};
 
-	const char* m_dev_layers[max_cnt]
-	{
+	const char* m_dev_layers[max_cnt] {
 		"VK_LAYER_KHRONOS_validation",
 	};
 

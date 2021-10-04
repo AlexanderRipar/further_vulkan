@@ -115,12 +115,6 @@ struct sdf_font
 
 	och::status create()
 	{
-		och::mat4 test_mat = och::mat4::translate(1.0F, 2.0F, 3.0F);
-
-		test_mat = transpose(test_mat);
-
-		och::print("{}\n", test_mat);
-
 		check(context.create("Compute Font", 1440, 810, 1, 0, 0));
 
 		// Create Staging Command Pool
