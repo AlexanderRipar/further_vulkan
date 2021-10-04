@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
 #include "bitmap.h"
 
@@ -24,12 +24,11 @@ public:
 
 	using threshold_fn = bool (*) (texel_b8g8r8) noexcept;
 
-	och::err_info load_bmp(const char* filename, threshold_fn cutoff = [](texel_b8g8r8 pixel) noexcept {return pixel.b || pixel.g || pixel.r; }) noexcept
+	och::status load_bmp(const char* filename, threshold_fn cutoff = [](texel_b8g8r8 pixel) noexcept {return pixel.b || pixel.g || pixel.r; }) noexcept
 	{
-		bitmap_file file(filename);
+		bitmap_file file;
 
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		check(file.create(filename));
 
 		if (m_data)
 			free(m_data);
@@ -49,15 +48,16 @@ public:
 					if(cutoff(file(x, y)))
 						set(x, y);
 
+		file.destroy();
+
 		return {};
 	}
 
-	och::err_info load_bim(const char* filename) noexcept
+	och::status load_bim(const char* filename) noexcept
 	{
-		och::mapped_file file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		och::mapped_file file;
+		
+		check(file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail));
 
 		if (m_data)
 			free(m_data);
@@ -72,35 +72,39 @@ public:
 
 		memcpy(m_data, file.data() + 8, m_height * m_stride);
 
+		file.close();
+
 		return {};
 	}
 
-	och::err_info save_bmp(const char* filename, texel_b8g8r8 set_colour = col::b8g8r8::white, texel_b8g8r8 unset_colour = col::b8g8r8::black, bool overwrite_existing_file = false) noexcept
+	och::status save_bmp(const char* filename, texel_b8g8r8 set_colour = col::b8g8r8::white, texel_b8g8r8 unset_colour = col::b8g8r8::black, bool overwrite_existing_file = false) noexcept
 	{
-		bitmap_file file(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		bitmap_file file;
+		
+		check(file.create(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height));
 
 		for (uint32_t y = 0; y != m_height; ++y)
 			for (uint32_t x = 0; x != m_width; ++x)
 				file(x, y) = get(x, y) ? set_colour : unset_colour;
 
+		file.destroy();
+
 		return {};
 	}
 
-	och::err_info save_bim(const char* filename, bool overwrite_existing_file = false)
+	och::status save_bim(const char* filename, bool overwrite_existing_file = false)
 	{
-		och::mapped_file file(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, m_stride * m_height + 8);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		och::mapped_file file;
+		
+		check(file.create(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, m_stride * m_height + 8));
 
 		memcpy(file.data(), &m_width, 4);
 
 		memcpy(file.data() + 4, &m_height, 4);
 
 		memcpy(file.data() + 8, m_data, m_stride * m_height);
+
+		file.close();
 
 		return {};
 	}

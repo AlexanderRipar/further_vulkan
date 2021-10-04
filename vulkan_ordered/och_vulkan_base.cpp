@@ -250,10 +250,10 @@ DWORD message_pump_thread_fn(void* data)
 
 
 
-och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
+och::status och::vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
 {
 	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
-		return MSG_ERROR("Too many queues requested");
+		return msg_error("Too many queues requested");
 
 	m_app_name = app_name;
 
@@ -261,13 +261,13 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 	{
 		// Create an auto-reset event for the thread to indicate it has completed its window creation
 		if (HANDLE wait_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !wait_event)
-			return MSG_ERROR("Failed to create wait event");
+			return msg_error("Failed to create wait event");
 		else
 			m_message_pump_initialization_wait_event = wait_event;
 
 		// Create an auto-reset event to signal the message pump thread once it should start pumping messages
 		if (HANDLE continue_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !continue_event)
-			return MSG_ERROR("Failed to create wait event");
+			return msg_error("Failed to create wait event");
 		else
 			m_message_pump_start_wait_event = continue_event;
 
@@ -288,7 +288,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 
 			m_message_pump_thread_id = 0;
 
-			return MSG_ERROR("Could not create thread");
+			return msg_error("Could not create thread");
 		}
 
 		m_message_pump_thread_handle = thread_handle;
@@ -310,9 +310,9 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 				och::print("Message Pump Thread exited with 0x{:X}\n", static_cast<uint32_t>(exit_code));
 
 			if (wait_result == WAIT_TIMEOUT)
-				return MSG_ERROR("Wait on window creation timed out");
+				return msg_error("Wait on window creation timed out");
 			else if (wait_result)
-				return MSG_ERROR("Wait on window creation failed");
+				return msg_error("Wait on window creation failed");
 		}
 	}
 
@@ -337,7 +337,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		check(s_feats.check_instance_support(supports_extensions));
 
 		if (!supports_extensions)
-			return MSG_ERROR("Not all required instance extensions / layers are supported");
+			return msg_error("Not all required instance extensions / layers are supported");
 
 		VkInstanceCreateInfo instance_ci{};
 		instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -362,7 +362,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 			check(create_fn(m_instance, &messenger_ci, nullptr, &m_debug_messenger));
 		}
 		else
-			return MSG_ERROR("Could not load function vkCreateDebugUtilsMessengerEXT");
+			return msg_error("Could not load function vkCreateDebugUtilsMessengerEXT");
 
 #endif // OCH_VALIDATE
 	}
@@ -529,7 +529,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 			goto DEVICE_SELECTED;
 		}
 
-		return MSG_ERROR("Could not locate a suitable physical device");
+		return msg_error("Could not locate a suitable physical device");
 
 	DEVICE_SELECTED:;
 	}
@@ -661,7 +661,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		if (surface_capabilites.minImageCount == MAX_SWAPCHAIN_IMAGE_CNT || surface_capabilites.maxImageCount == surface_capabilites.minImageCount)
 			--requested_img_cnt;
 		else if (surface_capabilites.minImageCount > MAX_SWAPCHAIN_IMAGE_CNT)
-			return MSG_ERROR("Minimum number of images supported by swapchain exceeds engine's maximum");
+			return msg_error("Minimum number of images supported by swapchain exceeds engine's maximum");
 
 		VkSwapchainCreateInfoKHR swapchain_ci{};
 		swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -691,7 +691,7 @@ och::err_info och::vulkan_context::create(const char* app_name, uint32_t window_
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
 		if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
-			return MSG_ERROR("Created swapchain contains too many images");
+			return msg_error("Created swapchain contains too many images");
 
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
 	}
@@ -765,7 +765,7 @@ void och::vulkan_context::destroy() const noexcept
 	UnregisterClassW(WINDOW_CLASS_NAME, GetModuleHandleW(nullptr));
 }
 
-och::err_info och::vulkan_context::recreate_swapchain() noexcept
+och::status och::vulkan_context::recreate_swapchain() noexcept
 {
 	check(vkDeviceWaitIdle(m_device));
 
@@ -822,7 +822,7 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
 		if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
-			return MSG_ERROR("Recreated swapchain contains too many images");
+			return msg_error("Recreated swapchain contains too many images");
 
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
 	}
@@ -852,7 +852,7 @@ och::err_info och::vulkan_context::recreate_swapchain() noexcept
 	return {};
 }
 
-och::err_info och::vulkan_context::suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept
+och::status och::vulkan_context::suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept
 {
 	for (uint32_t i = 0; i != m_memory_properties.memoryTypeCount; ++i)
 		if ((memory_type_mask & (1 << i)) && och::contains_all(m_memory_properties.memoryTypes[i].propertyFlags, property_flags))
@@ -864,15 +864,14 @@ och::err_info och::vulkan_context::suitable_memory_type_idx(uint32_t& out_memory
 
 	out_memory_type_idx = 0;
 
-	return MSG_ERROR("Could not find suitable memory type index");
+	return msg_error("Could not find suitable memory type index");
 }
 
-och::err_info och::vulkan_context::load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept
+och::status och::vulkan_context::load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept
 {
-	och::mapped_file<uint32_t> shader_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
-
-	if (!shader_file)
-		return MSG_ERROR("Could not find shader file");
+	och::mapped_file<uint32_t> shader_file;
+	
+	check(shader_file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail));
 
 	VkShaderModuleCreateInfo module_ci{};
 	module_ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -883,10 +882,12 @@ och::err_info och::vulkan_context::load_shader_module_file(VkShaderModule& out_s
 
 	check(vkCreateShaderModule(m_device, &module_ci, nullptr, &out_shader_module));
 
+	shader_file.close();
+
 	return {};
 }
 
-och::err_info och::vulkan_context::begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept
+och::status och::vulkan_context::begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept
 {
 	VkCommandBufferAllocateInfo alloc_info{};
 	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -905,7 +906,7 @@ och::err_info och::vulkan_context::begin_onetime_command(VkCommandBuffer& out_co
 	return {};
 }
 
-och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free) const noexcept
+och::status och::vulkan_context::submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free) const noexcept
 {
 	check(vkEndCommandBuffer(command_buffer));
 
@@ -926,10 +927,10 @@ och::err_info och::vulkan_context::submit_onetime_command(VkCommandBuffer comman
 	return {};
 }
 
-och::err_info och::vulkan_context::begin_message_processing() noexcept
+och::status och::vulkan_context::begin_message_processing() noexcept
 {
 	if (!SetEvent(m_message_pump_start_wait_event))
-		return MSG_ERROR("Failed to signal message pump start event");
+		return msg_error("Failed to signal message pump start event");
 
 	return {};
 }

@@ -34,9 +34,6 @@
     <Filter Include="vulkan_base">
       <UniqueIdentifier>{161bebb9-ac4f-45d1-9dda-f779aaf10eb3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="error_handling">
-      <UniqueIdentifier>{32dd45b5-8605-4dbd-bd87-684761503274}</UniqueIdentifier>
-    </Filter>
     <Filter Include="samples\sdf_font">
       <UniqueIdentifier>{d4937fdd-d47d-440f-8e39-a753616f75d2}</UniqueIdentifier>
     </Filter>
@@ -75,8 +72,8 @@
     <ClCompile Include="och_vulkan_base.cpp">
       <Filter>vulkan_base</Filter>
     </ClCompile>
-    <ClCompile Include="och_error_handling.cpp">
-      <Filter>error_handling</Filter>
+    <ClCompile Include="..\..\och_lib\och_lib\och_err.cpp">
+      <Filter>och_lib</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -161,8 +158,8 @@
     <ClInclude Include="och_vulkan_base.h">
       <Filter>vulkan_base</Filter>
     </ClInclude>
-    <ClInclude Include="och_error_handling.h">
-      <Filter>error_handling</Filter>
+    <ClInclude Include="..\..\och_lib\och_lib\och_err.h">
+      <Filter>och_lib</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

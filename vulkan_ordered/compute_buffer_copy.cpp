@@ -53,7 +53,7 @@ struct simple_compute_buffer_copy
 
 
 
-	och::err_info create() noexcept
+	och::status create() noexcept
 		{
 			check(context.create("Compute Buffer Copy", 1440, 810, 1, 1, 0, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
 
@@ -264,7 +264,7 @@ struct simple_compute_buffer_copy
 			return {};
 		}
 
-	och::err_info run() noexcept
+	och::status run() noexcept
 		{
 			// Populate Source-Buffer
 			{
@@ -375,11 +375,11 @@ struct simple_compute_buffer_copy
 
 
 
-och::err_info run_compute_buffer_copy() noexcept
+och::status run_compute_buffer_copy() noexcept
 {
 	simple_compute_buffer_copy program;
 
-	och::err_info err = program.create();
+	och::status err = program.create();
 
 	if (!err)
 		err = program.run();

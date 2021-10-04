@@ -1,5 +1,5 @@
 #pragma once
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
-och::err_info run_compute_to_swapchain(bool use_simplex) noexcept;
+och::status run_compute_to_swapchain(bool use_simplex) noexcept;

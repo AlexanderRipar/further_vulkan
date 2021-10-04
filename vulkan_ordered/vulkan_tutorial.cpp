@@ -11,7 +11,7 @@
 #include "och_timer.h"
 #include "och_fio.h"
 #include "och_vulkan_base.h"
-#include "och_error_handling.h"
+#include "och_err.h"
 #include "och_matmath.h"
 #include "och_fmt.h"
 
@@ -180,7 +180,7 @@ struct vulkan_tutorial
 
 
 
-	och::err_info run()
+	och::status run()
 	{
 		check(init());
 
@@ -191,7 +191,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info init()
+	och::status init()
 	{
 		och::print("Starting initialization\n\n");
 
@@ -240,7 +240,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_render_pass()
+	och::status create_vk_render_pass()
 	{
 		VkAttachmentDescription color_attachment{};
 		color_attachment.format = context.m_swapchain_format;
@@ -300,7 +300,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_descriptor_set_layout()
+	och::status create_vk_descriptor_set_layout()
 	{
 		VkDescriptorSetLayoutBinding ubo_layout_binding{};
 		ubo_layout_binding.binding = 0;
@@ -328,7 +328,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_graphics_pipeline_layout()
+	och::status create_vk_graphics_pipeline_layout()
 	{
 		VkPipelineLayoutCreateInfo layout_info{};
 		layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -342,7 +342,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_graphics_pipeline()
+	och::status create_vk_graphics_pipeline()
 	{
 		VkShaderModule vert_shader_module;
 
@@ -483,7 +483,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_command_pool()
+	och::status create_vk_command_pool()
 	{
 		VkCommandPoolCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -494,7 +494,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_depth_resources()
+	och::status create_vk_depth_resources()
 	{
 		check(allocate_image(context.m_swapchain_extent.width, context.m_swapchain_extent.height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vk_depth_image, vk_depth_image_memory, VK_SAMPLE_COUNT_1_BIT));
 
@@ -505,7 +505,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_swapchain_framebuffers()
+	och::status create_vk_swapchain_framebuffers()
 	{
 		vk_swapchain_framebuffers.resize(context.m_swapchain_image_cnt);
 
@@ -528,12 +528,11 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_texture_image()
+	och::status create_vk_texture_image()
 	{
-		och::mapped_file<bitmap_header> texture_file(och::stringview("textures/" OCH_ASSET_NAME ".bmp"), och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
-
-		if (!texture_file)
-			return MAKE_ERROR(1);
+		och::mapped_file<bitmap_header> texture_file;
+		
+		check(texture_file.create(och::stringview("textures/" OCH_ASSET_NAME ".bmp"), och::fio::access::read, och::fio::open::normal, och::fio::open::fail));
 
 		bitmap_header& header = texture_file[0];
 
@@ -556,7 +555,7 @@ struct vulkan_tutorial
 			pixels = with_alpha;
 		}
 		else if (header.bits_per_pixel != 32)
-			return MAKE_ERROR(1);
+			return msg_error("Only 24- and 32-bit-per-pixel bitmaps can be used");
 
 		VkBuffer staging_buf;
 		VkDeviceMemory staging_buf_mem;
@@ -601,17 +600,19 @@ struct vulkan_tutorial
 
 		vkFreeMemory(context.m_device, staging_buf_mem, nullptr);
 
+		texture_file.close();
+
 		return {};
 	}
 
-	och::err_info create_vk_texture_image_view()
+	och::status create_vk_texture_image_view()
 	{
 		check(allocate_image_view(vk_texture_image, VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, vk_texture_image_view, vk_texture_image_mipmap_levels));
 
 		return {};
 	}
 
-	och::err_info create_vk_texture_sampler()
+	och::status create_vk_texture_sampler()
 	{
 		VkPhysicalDeviceProperties dev_props{};
 
@@ -640,7 +641,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info load_obj_model()
+	och::status load_obj_model()
 	{
 		tinyobj::attrib_t attrib;
 		std::vector<tinyobj::shape_t> shapes;
@@ -649,9 +650,11 @@ struct vulkan_tutorial
 
 		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "models/" OCH_ASSET_NAME ".obj"))
 		{
-			och::print("Failed to load .obj File:\n\tWarning: {}\n\tError: {}\n", warn.c_str(), err.c_str());
+			och::utf8_string error_str;
 
-			return MAKE_ERROR(1);
+			och::sprint(error_str, "Failed to load .obj File:\n\tWarning: {}\n\tError: {}\n", warn.c_str(), err.c_str());
+
+			return msg_error(error_str.raw_cbegin());
 		}
 
 		std::unordered_map<vertex, uint32_t> uniqueVertices{};
@@ -693,7 +696,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_vertex_buffer()
+	och::status create_vk_vertex_buffer()
 	{
 		VkBuffer staging_buf = nullptr;
 
@@ -720,7 +723,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_index_buffer()
+	och::status create_vk_index_buffer()
 	{
 		VkBuffer staging_buf = nullptr;
 
@@ -747,7 +750,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_uniform_buffers()
+	och::status create_vk_uniform_buffers()
 	{
 		vk_uniform_buffers.resize(context.m_swapchain_image_cnt);
 		vk_uniform_buffers_memory.resize(context.m_swapchain_image_cnt);
@@ -758,7 +761,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_descriptor_pool()
+	och::status create_vk_descriptor_pool()
 	{
 		VkDescriptorPoolSize pool_sizes[]{
 			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, context.m_swapchain_image_cnt},
@@ -776,7 +779,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_descriptor_sets()
+	och::status create_vk_descriptor_sets()
 	{
 		std::vector<VkDescriptorSetLayout> desc_set_layouts(context.m_swapchain_image_cnt, vk_descriptor_set_layout);
 
@@ -832,7 +835,7 @@ struct vulkan_tutorial
 		return{};
 	}
 
-	och::err_info create_vk_command_buffers()
+	och::status create_vk_command_buffers()
 	{
 		vk_command_buffers.resize(context.m_swapchain_image_cnt);
 
@@ -885,7 +888,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info create_vk_sync_objects()
+	och::status create_vk_sync_objects()
 	{
 		vk_images_inflight_fences.resize(context.m_swapchain_image_cnt, nullptr);
 
@@ -908,7 +911,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info main_loop()
+	och::status main_loop()
 	{
 		check(context.begin_message_processing());
 
@@ -920,7 +923,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info draw_frame()
+	och::status draw_frame()
 	{
 		check(vkWaitForFences(context.m_device, 1, &vk_inflight_fences[curr_frame], VK_FALSE, UINT64_MAX));
 
@@ -979,7 +982,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info recreate_swapchain()
+	och::status recreate_swapchain()
 	{
 		cleanup_swapchain();
 
@@ -1066,12 +1069,11 @@ struct vulkan_tutorial
 		context.destroy();
 	}
 
-	och::err_info create_shader_module_from_file(const char* filename, VkShaderModule& out_shader_module)
+	och::status create_shader_module_from_file(const char* filename, VkShaderModule& out_shader_module)
 	{
-		och::mapped_file<uint8_t> shader_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
-	
-		if (!shader_file)
-			return MAKE_ERROR(1);
+		och::mapped_file<uint8_t> shader_file;
+		
+		check(shader_file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail));
 	
 		VkShaderModuleCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1080,10 +1082,12 @@ struct vulkan_tutorial
 	
 		check(vkCreateShaderModule(context.m_device, &create_info, nullptr, &out_shader_module));
 	
+		shader_file.close();
+
 		return {};
 	}
 	
-	och::err_info query_memory_type_index(uint32_t type_filter, VkMemoryPropertyFlags properties, uint32_t& out_type_index)
+	och::status query_memory_type_index(uint32_t type_filter, VkMemoryPropertyFlags properties, uint32_t& out_type_index)
 	{
 		VkPhysicalDeviceMemoryProperties mem_props{};
 	
@@ -1097,10 +1101,10 @@ struct vulkan_tutorial
 				return{};
 			}
 	
-		return MAKE_ERROR(1);
+		return msg_error("Could not find suitable memory type");
 	}
 	
-	och::err_info allocate_buffer(VkDeviceSize bytes, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory, VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_cnt = 0, const uint32_t* queue_family_ptr = nullptr)
+	och::status allocate_buffer(VkDeviceSize bytes, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory, VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_cnt = 0, const uint32_t* queue_family_ptr = nullptr)
 	{
 		VkBufferCreateInfo buffer_info{};
 		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1132,7 +1136,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info allocate_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkImage& out_image, VkDeviceMemory& out_image_memory, VkSampleCountFlagBits sample_cnt = VK_SAMPLE_COUNT_1_BIT, uint32_t mip_levels = 1, VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_cnt = 0, const uint32_t* queue_family_ptr = nullptr)
+	och::status allocate_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkImage& out_image, VkDeviceMemory& out_image_memory, VkSampleCountFlagBits sample_cnt = VK_SAMPLE_COUNT_1_BIT, uint32_t mip_levels = 1, VkSharingMode share_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_cnt = 0, const uint32_t* queue_family_ptr = nullptr)
 	{
 		VkImageCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1174,7 +1178,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info allocate_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_mask, VkImageView& out_image_view, uint32_t mip_levels = 1)
+	och::status allocate_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_mask, VkImageView& out_image_view, uint32_t mip_levels = 1)
 	{
 		VkImageViewCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1196,7 +1200,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info copy_buffer_to_buffer(VkBuffer dst, VkBuffer src, VkDeviceSize size, VkDeviceSize dst_offset = 0, VkDeviceSize src_offset = 0)
+	och::status copy_buffer_to_buffer(VkBuffer dst, VkBuffer src, VkDeviceSize size, VkDeviceSize dst_offset = 0, VkDeviceSize src_offset = 0)
 	{
 		VkCommandBuffer cmd_buffer;
 	
@@ -1214,7 +1218,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info copy_buffer_to_image(VkImage dst, VkBuffer src, uint32_t width, uint32_t height)
+	och::status copy_buffer_to_image(VkImage dst, VkBuffer src, uint32_t width, uint32_t height)
 	{
 		VkCommandBuffer cmd_buffer;
 	
@@ -1238,7 +1242,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t mip_levels = 1)
+	och::status transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t mip_levels = 1)
 	{
 		VkCommandBuffer transit_cmd_buffer;
 	
@@ -1287,7 +1291,7 @@ struct vulkan_tutorial
 			dst_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		}
 		else
-			return MAKE_ERROR(1);
+			return msg_error("old_layout/new_layout combination not supported");
 	
 		vkCmdPipelineBarrier(transit_cmd_buffer, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &img_barrier);
 	
@@ -1296,14 +1300,14 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info generate_mipmap(VkImage image, VkFormat format, int32_t width, int32_t height, uint32_t mip_levels)
+	och::status generate_mipmap(VkImage image, VkFormat format, int32_t width, int32_t height, uint32_t mip_levels)
 	{
 		VkFormatProperties props;
 	
 		vkGetPhysicalDeviceFormatProperties(context.m_physical_device, format, &props);
 	
 		if (!(props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
-			return MAKE_ERROR(1);
+			return msg_error("Sampled images on the active device do not support linear filtering with optimal image tiling");
 	
 		VkCommandBuffer buf;
 	
@@ -1375,7 +1379,7 @@ struct vulkan_tutorial
 		return {};
 	}
 
-	och::err_info beg_single_command(VkCommandBuffer& out_command_buffer)
+	och::status beg_single_command(VkCommandBuffer& out_command_buffer)
 	{
 		VkCommandBufferAllocateInfo alloc_info{};
 		alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1394,7 +1398,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info end_single_command(VkCommandBuffer command_buffer)
+	och::status end_single_command(VkCommandBuffer command_buffer)
 	{
 		check(vkEndCommandBuffer(command_buffer));
 	
@@ -1412,7 +1416,7 @@ struct vulkan_tutorial
 		return {};
 	}
 	
-	och::err_info update_uniforms(uint32_t image_idx)
+	och::status update_uniforms(uint32_t image_idx)
 	{
 		static och::time start_t = och::time::now();
 	
@@ -1471,7 +1475,7 @@ struct vulkan_tutorial
 	}
 };
 
-och::err_info run_vulkan_tutorial() noexcept
+och::status run_vulkan_tutorial() noexcept
 {
 	vulkan_tutorial program{};
 

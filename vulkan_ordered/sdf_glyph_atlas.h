@@ -1,6 +1,6 @@
 #pragma once
 
-#include "och_error_handling.h"
+#include "och_err.h"
 #include "och_matmath.h"
 
 #include "sdf_image.h"
@@ -106,7 +106,7 @@ public:
 	// TODO: 
 	// Calculate advance to save in m_map_indices
 	// Implement mapping equivalent glyphs to a single spot in the image.
-	och::err_info create(const char* truetype_filename, uint32_t glyph_size, uint32_t glyph_padding_pixels, float sdf_clamp, uint32_t map_width, const och::range<codept_range> codept_ranges) noexcept
+	och::status create(const char* truetype_filename, uint32_t glyph_size, uint32_t glyph_padding_pixels, float sdf_clamp, uint32_t map_width, const och::range<codept_range> codept_ranges) noexcept
 	{
 		struct glyph_address
 		{
@@ -126,10 +126,9 @@ public:
 
 		// Open file
 
-		truetype_file file(truetype_filename);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		truetype_file file;
+		
+		check(file.create(truetype_filename));
 
 		m_line_height = file.line_height();
 
@@ -288,7 +287,7 @@ public:
 				uint32_t padded_h = a.h + glyph_padding_pixels;
 
 				if (padded_w > map_width - glyph_padding_pixels)
-					return MSG_ERROR("Glyph too large for given map_width parameter");
+					return msg_error("Glyph too large for given map_width parameter");
 
 				if (curr_x + padded_w > map_width - glyph_padding_pixels)
 				{
@@ -481,6 +480,8 @@ public:
 			}
 		}
 
+		file.close();
+
 		return {};
 	}
 
@@ -489,7 +490,7 @@ public:
 		
 	}
 
-	och::err_info save_glfatl(const char* filename, bool overwrite_existing_file = false) const noexcept
+	och::status save_glfatl(const char* filename, bool overwrite_existing_file = false) const noexcept
 	{
 		const uint32_t image_bytes = m_width * m_height;
 
@@ -501,14 +502,13 @@ public:
 
 		const uint32_t total_file_bytes = image_bytes + map_ranges_bytes + map_indices_bytes + metadata_bytes;
 
-		och::mapped_file<glyph_atlas::fileheader> output_file(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, total_file_bytes);
-
-		if (!output_file)
-			return MSG_ERROR("Could not open file");
+		och::mapped_file<glyph_atlas::fileheader> file;
+		
+		check(file.create(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, total_file_bytes));
 
 		// Layout: m_width, m_height, m_map_ranges.size(), m_map_indices.size(), m_map_ranges, m_map_indices, m_image
 
-		glyph_atlas::fileheader& hdr = output_file[0];
+		glyph_atlas::fileheader& hdr = file[0];
 
 		hdr.m_width = m_width;
 
@@ -528,17 +528,18 @@ public:
 
 		memcpy(hdr.image_data(), m_image.data(), image_bytes);
 
+		file.close();
+
 		return {};
 	}
 
-	och::err_info load_glfatl(const char* filename) noexcept
+	och::status load_glfatl(const char* filename) noexcept
 	{
-		const och::mapped_file<const glyph_atlas::fileheader> input_file(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail);
+		och::mapped_file<const glyph_atlas::fileheader> file;
+		
+		check(file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail));
 
-		if (!input_file)
-			return MSG_ERROR("Could not open file");
-
-		const glyph_atlas::fileheader& hdr = input_file[0];
+		const glyph_atlas::fileheader& hdr = file[0];
 
 		m_width = hdr.m_width;
 		
@@ -560,15 +561,16 @@ public:
 
 		memcpy(m_image.data(), hdr.image_data(), hdr.image_bytes());
 
+		file.close();
+
 		return {};
 	}
 
-	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false) const noexcept
+	och::status save_bmp(const char* filename, bool overwrite_existing_file = false) const noexcept
 	{
-		bitmap_file file(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		bitmap_file file;
+		
+		check(file.create(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height));
 
 		for (uint32_t y = 0; y != m_height; ++y)
 			for (uint32_t x = 0; x != m_width; ++x)
@@ -577,6 +579,8 @@ public:
 
 				file(x, y) = { v, v, v };
 			}
+
+		file.destroy();
 
 		return {};
 	}

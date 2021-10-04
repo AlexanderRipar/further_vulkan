@@ -6,6 +6,8 @@
 
 #include "och_matmath.h"
 
+#include "och_err.h"
+
 
 struct glyph_metrics
 {
@@ -331,7 +333,9 @@ private:
 
 public:
 
-	truetype_file(const char* filename) noexcept;
+	och::status create(const char* filename) noexcept;
+
+	void close() noexcept;
 
 	float baseline_offset() const noexcept;
 

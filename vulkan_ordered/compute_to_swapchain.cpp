@@ -63,7 +63,7 @@ struct compute_image_to_swapchain
 
 
 
-	och::err_info create(bool use_simplex) noexcept
+	och::status create(bool use_simplex) noexcept
 	{
 		is_using_simplex = use_simplex;
 
@@ -239,7 +239,7 @@ struct compute_image_to_swapchain
 		return {};
 	}
 	
-	och::err_info run() noexcept
+	och::status run() noexcept
 	{
 		check(context.begin_message_processing());
 
@@ -340,7 +340,7 @@ struct compute_image_to_swapchain
 		context.destroy();
 	}
 
-	och::err_info record_command_buffer(VkCommandBuffer command_buffer, uint32_t swapchain_idx)
+	och::status record_command_buffer(VkCommandBuffer command_buffer, uint32_t swapchain_idx)
 	{
 		och::timespan delta_t = och::time::now() - creation_time;
 
@@ -421,7 +421,7 @@ struct compute_image_to_swapchain
 		return {};
 	}
 
-	och::err_info recreate_swapchain() noexcept
+	och::status recreate_swapchain() noexcept
 	{
 		check(context.recreate_swapchain());
 
@@ -508,11 +508,11 @@ struct compute_image_to_swapchain
 	}
 };
 
-och::err_info run_compute_to_swapchain(bool use_simplex) noexcept
+och::status run_compute_to_swapchain(bool use_simplex) noexcept
 {
 	compute_image_to_swapchain program;
 
-	och::err_info err = program.create(use_simplex);
+	och::status err = program.create(use_simplex);
 
 	if (!err)
 		program.run();

@@ -1,5 +1,5 @@
 #pragma once
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
-och::err_info run_sdf_font();
+och::status run_sdf_font();

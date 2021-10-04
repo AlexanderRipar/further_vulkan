@@ -4,7 +4,7 @@
 
 #include <atomic>
 
-#include "och_error_handling.h"
+#include "och_err.h"
 #include "och_heap_buffer.h"
 #include "och_virtual_keys.h"
 #include "och_utf8.h"
@@ -91,10 +91,10 @@ namespace och
 
 		uint32_t m_dev_layer_cnt = 1;
 
-		err_info add_instance_extensions(const char** exts, uint32_t cnt)
+		och::status add_instance_extensions(const char** exts, uint32_t cnt)
 		{
 			if (m_inst_extension_cnt + cnt > max_cnt)
-				return MSG_ERROR("Too many instance extensions requested");
+				return msg_error("Too many instance extensions requested");
 
 			for (uint32_t i = 0; i != cnt; ++i)
 				m_inst_extensions[m_inst_extension_cnt++] = exts[i];
@@ -102,10 +102,10 @@ namespace och
 			return{};
 		};
 
-		err_info add_instance_layers(const char** layers, uint32_t cnt)
+		och::status add_instance_layers(const char** layers, uint32_t cnt)
 		{
 			if (m_inst_layer_cnt + cnt > max_cnt)
-				return MSG_ERROR("Too many instance layers requested");
+				return msg_error("Too many instance layers requested");
 
 			for (uint32_t i = 0; i != cnt; ++i)
 				m_inst_layers[m_inst_layer_cnt++] = layers[i];
@@ -113,10 +113,10 @@ namespace och
 			return{};
 		};
 
-		err_info add_device_extensions(const char** exts, uint32_t cnt)
+		och::status add_device_extensions(const char** exts, uint32_t cnt)
 		{
 			if (m_dev_extension_cnt + cnt > max_cnt)
-				return MSG_ERROR("Too many device extensions requested");
+				return msg_error("Too many device extensions requested");
 
 			for (uint32_t i = 0; i != cnt; ++i)
 				m_dev_extensions[m_dev_extension_cnt++] = exts[i];
@@ -124,10 +124,10 @@ namespace och
 			return{};
 		};
 
-		err_info add_device_layers(const char** layers, uint32_t cnt)
+		och::status add_device_layers(const char** layers, uint32_t cnt)
 		{
 			if (m_dev_layer_cnt + cnt > max_cnt)
-				return MSG_ERROR("Too many device layers requested");
+				return msg_error("Too many device layers requested");
 
 			for (uint32_t i = 0; i != cnt; ++i)
 				m_dev_layers[m_dev_layer_cnt++] = layers[i];
@@ -151,7 +151,7 @@ namespace och
 
 		uint32_t dev_layer_cnt() const noexcept { return m_dev_layer_cnt; }
 
-		err_info check_instance_support(bool& has_support) const noexcept
+		och::status check_instance_support(bool& has_support) const noexcept
 		{
 			{
 				uint32_t avl_ext_cnt;
@@ -167,7 +167,7 @@ namespace och
 
 					has_support = false;
 
-					return{};
+					return {};
 
 				EXT_AVAILABLE:;
 				}
@@ -198,7 +198,7 @@ namespace och
 			return {};
 		}
 
-		err_info check_device_support(VkPhysicalDevice dev, bool& has_support) const noexcept
+		och::status check_device_support(VkPhysicalDevice dev, bool& has_support) const noexcept
 		{
 			{
 				uint32_t avl_ext_cnt;
@@ -378,24 +378,24 @@ namespace och
 		simple_vec<input_event_desc> m_input_events{ 0 };
 
 
-		err_info create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
+		och::status create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
 
 		void destroy() const noexcept;
 
 
-		err_info recreate_swapchain() noexcept;
+		och::status recreate_swapchain() noexcept;
 
 
-		err_info suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept;
+		och::status suitable_memory_type_idx(uint32_t& out_memory_type_idx, uint32_t memory_type_mask, VkMemoryPropertyFlags property_flags) const noexcept;
 
-		err_info load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept;
+		och::status load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept;
 
-		err_info begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept;
+		och::status begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept;
 
-		err_info submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
+		och::status submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
 
 
-		err_info begin_message_processing() noexcept;
+		och::status begin_message_processing() noexcept;
 
 		void end_message_processing() noexcept;
 

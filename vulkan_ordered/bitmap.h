@@ -89,15 +89,45 @@ public:
 
 	using point_op_fn = texel_b8g8r8(*) (texel_b8g8r8) noexcept;
 
-	bitmap_file(const char* filename, och::fio::open existing_mode = och::fio::open::normal, uint32_t new_width = 0, uint32_t new_height = 0) :
-		m_file{ och::mapped_file<bitmap_header>(filename, och::fio::access::readwrite, existing_mode, new_width && new_height ? och::fio::open::normal : och::fio::open::fail, new_width && new_height ? bitmap_header::stride(new_width) * new_height + image_data_offset : 0) },
-		m_image_data{ m_file ? m_file[0].image_offset ? m_file[0].raw_image_data() : reinterpret_cast<uint8_t*>(m_file.data()) + image_data_offset : nullptr },
-		m_stride{ m_file ? m_file[0].image_offset ? bitmap_header::stride(m_file[0].width) : bitmap_header::stride(new_width) : 0 },
-		m_width{ m_file ? m_file[0].image_offset ? m_file[0].width : new_width : 0 },
-		m_height{ m_file ? m_file[0].image_offset ? m_file[0].height : new_height : 0 }
+	och::status create(const char* filename, och::fio::open existing_mode = och::fio::open::normal, uint32_t new_width = 0, uint32_t new_height = 0) noexcept
 	{
-		if (m_file && !m_file[0].image_offset)
+		const och::fio::open new_mode = new_width && new_height ? och::fio::open::normal : och::fio::open::fail;
+
+		const uint32_t mapping_size = new_width && new_height ? bitmap_header::stride(new_width) * new_height + image_data_offset : 0;
+
+		check(m_file.create(filename, och::fio::access::readwrite, existing_mode, new_mode, mapping_size));
+
+		if (m_file[0].image_offset)
+		{
+			m_image_data = m_file[0].raw_image_data();
+
+			m_stride = bitmap_header::stride(m_file[0].width);
+
+			m_width = m_file[0].width;
+
+			m_height = m_file[0].height;
+		}
+		else
+		{
+			m_image_data = reinterpret_cast<uint8_t*>(m_file.data()) + image_data_offset;
+
+			m_stride = bitmap_header::stride(new_width);
+
+			m_width = new_width;
+
+			m_height = new_height;
+
 			m_file[0].initialize(m_stride * m_height + image_data_offset, image_data_offset, m_width, m_height);
+		}
+
+		return {};
+	}
+
+	void destroy() noexcept
+	{
+		m_file.close();
+
+		m_image_data = nullptr;
 	}
 
 	texel_b8g8r8& operator()(uint32_t x, uint32_t y) noexcept
@@ -136,6 +166,4 @@ public:
 			for (uint32_t x = 0; x != m_width; ++x)
 				operator()(x, y) = operation(operator()(x, y));
 	}
-
-	operator bool() const noexcept { return m_file; }
 };

@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "och_range.h"
+
 namespace och
 {
 	template<typename T>

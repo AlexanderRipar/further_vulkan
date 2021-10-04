@@ -114,7 +114,7 @@ struct sdf_font
 
 
 
-	och::err_info create()
+	och::status create()
 	{
 		och::mat4 test_mat = och::mat4::translate(1.0F, 2.0F, 3.0F);
 
@@ -650,7 +650,7 @@ struct sdf_font
 		return {};
 	}
 
-	och::err_info run()
+	och::status run()
 	{
 		check(context.begin_message_processing());
 
@@ -941,7 +941,7 @@ struct sdf_font
 		context.destroy();
 	}
 
-	och::err_info record_command_buffer(VkCommandBuffer command_buffer, uint32_t swapchain_idx) noexcept
+	och::status record_command_buffer(VkCommandBuffer command_buffer, uint32_t swapchain_idx) noexcept
 	{
 		VkCommandBufferBeginInfo command_buffer_bi{};
 		command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -997,7 +997,7 @@ struct sdf_font
 		return {};
 	}
 
-	och::err_info recreate_swapchain()
+	och::status recreate_swapchain()
 	{
 		check(vkDeviceWaitIdle(context.m_device));
 
@@ -1035,7 +1035,7 @@ struct sdf_font
 		return {};
 	}
 
-	och::err_info create_pipeline() noexcept
+	och::status create_pipeline() noexcept
 	{
 		VkPipelineShaderStageCreateInfo shader_stages[2];
 		// Vertex
@@ -1185,11 +1185,11 @@ struct sdf_font
 	}
 };
 
-och::err_info run_sdf_font()
+och::status run_sdf_font()
 {
 	sdf_font program{};
 
-	och::err_info err = program.create();
+	och::status err = program.create();
 
 	if (!err)
 		err = program.run();

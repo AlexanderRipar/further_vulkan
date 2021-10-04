@@ -1,6 +1,6 @@
 ﻿#include "och_fmt.h"
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
 #include "och_helpers.h"
 
@@ -35,7 +35,7 @@ enum class sample_type
 	sdf_font,
 };
 
-och::err_info font_testing() noexcept
+och::status font_testing() noexcept
 {
 	//consola.ttf
 	#define FONT_NAME "ALGER"
@@ -44,7 +44,9 @@ och::err_info font_testing() noexcept
 	const char* glfatl_filename = "C:/Users/alex_2/source/repos/vulkan_ordered/vulkan_ordered/textures/" FONT_NAME ".glfatl";
 
 	{
-		truetype_file ttf_file(ttf_filename);
+		truetype_file ttf_file;
+		
+		check(ttf_file.create(ttf_filename));
 
 		glyph_data glf = ttf_file.get_glyph_data_from_codepoint('y');
 
@@ -86,7 +88,9 @@ och::err_info font_testing() noexcept
 
 	constexpr uint32_t text_w = 2048;
 
-	bitmap_file text_bmp("textures/text.bmp", och::fio::open::truncate, text_w, 256);
+	bitmap_file text_bmp;
+	
+	check(text_bmp.create("textures/text.bmp", och::fio::open::truncate, text_w, 256));
 
 	image_view atlas_view{ atlas.view() };
 
@@ -124,12 +128,14 @@ och::err_info font_testing() noexcept
 	// 	c = static_cast<uint8_t>(getchar());
 	// }
 
+	text_bmp.destroy();
+
 	atlas.destroy();
 
 	return {};
 }
 
-och::err_info testing() noexcept
+och::status testing() noexcept
 {
 	check(font_testing());
 
@@ -140,7 +146,7 @@ int main()
 {
 	constexpr sample_type to_run = sample_type::sdf_font;
 
-	och::err_info err{};
+	och::status err{};
 
 	switch (to_run)
 	{
@@ -174,12 +180,13 @@ int main()
 
 	if (err)
 	{
-		och::print("An Error occurred!\n");
-	
-		auto stack = och::get_stacktrace();
-	
-		for (auto& e : stack)
-			och::print("Function {} on Line {}: \"{}\"\n\n", e.function, e.line_num, e.call);
+		och::print("An Error occurred!\n\n0x{:X} (From \"{}\")\n{}\n\n{}\n\n", och::err::get_native_error_code(), och::err::get_error_type_name(), och::err::get_error_description(), och::err::get_error_message());
+		
+		for (uint32_t c = och::err::get_stack_depth(), i = 0; i != c; ++i)
+		{
+			const och::error_context& ctx = och::err::get_error_context(i);
+			och::print("File: {}\nFunction: {}\nLine {}: \"{}\"\n\n", ctx.filename(), ctx.function(), ctx.line_number(), ctx.line_content());
+		}
 	}
 	else
 		och::print("\nProcess terminated successfully\n");

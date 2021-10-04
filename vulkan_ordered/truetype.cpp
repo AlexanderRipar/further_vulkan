@@ -235,16 +235,15 @@ uint32_t cmap_f12(const void* raw_tbl, uint32_t cpt) noexcept
 
 
 
-truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail, 0, 0, och::fio::share::read_write_delete }
+och::status truetype_file::create(const char* filename) noexcept
 {
 	m_flags.is_valid_file = false;
 
-	if (!is_truetype_file(m_file))
-		return;
-
-	m_table_cnt = be_to_le(m_file[0].num_tables);
+	check(m_file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail, 0, 0, och::fio::share::read_write_delete));
 
 	// Load tables
+
+	m_table_cnt = be_to_le(m_file[0].num_tables);
 
 	m_loca_tbl = get_table("loca");
 
@@ -261,10 +260,10 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 	const cmap_table_data* cmap_tbl = static_cast<const cmap_table_data*>(get_table("cmap"));
 
 	if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_loca_tbl || !m_glyf_tbl || !m_hmtx_tbl)
-		return;
+		return msg_error("Could not find all necessary ttf-tables");
 
 	if (!(m_codepoint_mapper = query_codepoint_mapping(cmap_tbl)).data)
-		return;
+		return msg_error("Could not find supported codepoint-to-glyph mapping");
 
 	m_flags.full_glyph_offsets = head_tbl->index_to_loc_format;
 
@@ -290,6 +289,13 @@ truetype_file::truetype_file(const char* filename) noexcept : m_file{ filename, 
 		m_line_height = static_cast<float>(be_to_le(hhea_tbl->ascender) - be_to_le(hhea_tbl->descender) + be_to_le(hhea_tbl->line_gap)) * m_normalization_factor;
 
 	m_flags.is_valid_file = true;
+
+	return {};
+}
+
+void truetype_file::close() noexcept
+{
+	m_file.close();
 }
 
 float truetype_file::baseline_offset() const noexcept
@@ -750,9 +756,6 @@ glyph_metrics truetype_file::internal_get_glyph_metrics(uint32_t glyph_id) const
 
 bool truetype_file::is_truetype_file(const och::mapped_file<ttf_file_header>& file) noexcept
 {
-	if (!file)
-		return false;
-
 	uint32_t version = file[0].version;
 
 	return version == 0x00000100 || version == 0x74727565 || version == 0x74797031;

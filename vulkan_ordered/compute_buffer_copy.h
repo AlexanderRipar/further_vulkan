@@ -1,6 +1,6 @@
 #pragma once
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
 // Just copies one buffer to another
-och::err_info run_compute_buffer_copy() noexcept;
+och::status run_compute_buffer_copy() noexcept;

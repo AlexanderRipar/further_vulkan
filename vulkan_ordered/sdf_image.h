@@ -6,7 +6,7 @@
 
 #include <cassert>
 
-#include "och_error_handling.h"
+#include "och_err.h"
 
 #include "och_fio.h"
 
@@ -384,7 +384,7 @@ public:
 		}
 	};
 
-	och::err_info from_bim(const binary_image& img)
+	och::status from_bim(const binary_image& img)
 	{
 		constexpr point INSIDE = { 0, 0 }, OUTSIDE = { 0x3FFF, 0x3FFF };
 
@@ -438,7 +438,7 @@ public:
 		return {};
 	}
 
-	och::err_info from_glyph(const glyph_data& glyph, uint32_t image_width, uint32_t image_height, float glyph_scale) noexcept
+	och::status from_glyph(const glyph_data& glyph, uint32_t image_width, uint32_t image_height, float glyph_scale) noexcept
 	{
 		m_width = image_width;
 
@@ -453,26 +453,26 @@ public:
 		return {};
 	}
 
-	och::err_info save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = colour_mapper::nonlinear_distance)
+	och::status save_bmp(const char* filename, bool overwrite_existing_file = false, colour_mapper_fn colour_mapper = colour_mapper::nonlinear_distance)
 	{
-		bitmap_file file(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		bitmap_file file;
+		
+		check(file.create(filename, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, m_width, m_height));
 
 		for (int32_t y = 0; y != m_height; ++y)
 			for (int32_t x = 0; x != m_width; ++x)
 				file(x, y) = colour_mapper(m_data[x + y * m_width]);
 
+		file.destroy();
+
 		return {};
 	}
 
-	och::err_info save_sdf(const char* filename, bool overwrite_existing_file = false)
+	och::status save_sdf(const char* filename, bool overwrite_existing_file = false)
 	{
-		och::mapped_file file(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, m_width * m_height * sizeof(float) + 8);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		och::mapped_file file;
+		
+		check(file.create(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, m_width * m_height * sizeof(float) + 8));
 
 		memcpy(file.data(), &m_width, 4);
 
@@ -480,15 +480,16 @@ public:
 
 		memcpy(file.data() + 8, m_data, m_width * m_height * sizeof(float));
 
+		file.close();
+
 		return {};
 	}
 
-	och::err_info load_sdf(const char* filename) noexcept
+	och::status load_sdf(const char* filename) noexcept
 	{
-		och::mapped_file file(filename, och::fio::access::readwrite, och::fio::open::normal, och::fio::open::fail);
-
-		if (!file)
-			return MSG_ERROR("Could not open file");
+		och::mapped_file file;
+		
+		check(file.create(filename, och::fio::access::readwrite, och::fio::open::normal, och::fio::open::fail));
 
 		if (m_data)
 			free(m_data);
@@ -500,6 +501,8 @@ public:
 		m_data = static_cast<float*>(malloc(m_width * m_height * sizeof(float)));
 
 		memcpy(m_data, file.data() + 8, m_width * m_height * sizeof(float));
+
+		file.close();
 
 		return {};
 	}
