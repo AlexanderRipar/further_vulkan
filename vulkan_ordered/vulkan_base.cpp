@@ -1,6 +1,6 @@
 #include "vulkan_base.h"
 
-#include "och_heap_buffer.h"
+#include "heap_buffer.h"
 #include "och_helpers.h"
 #include "och_fmt.h"
 #include "och_fio.h"
@@ -386,7 +386,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 	{
 		uint32_t avl_dev_cnt;
 		check(vkEnumeratePhysicalDevices(m_instance, &avl_dev_cnt, nullptr));
-		och::heap_buffer<VkPhysicalDevice> avl_devs(avl_dev_cnt);
+		heap_buffer<VkPhysicalDevice> avl_devs(avl_dev_cnt);
 		check(vkEnumeratePhysicalDevices(m_instance, &avl_dev_cnt, avl_devs.data()));
 
 		for (uint32_t i = 0; i != avl_dev_cnt; ++i)
@@ -414,7 +414,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 			uint32_t queue_family_cnt;
 			vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_family_cnt, nullptr);
-			och::heap_buffer<VkQueueFamilyProperties> family_properties(queue_family_cnt);
+			heap_buffer<VkQueueFamilyProperties> family_properties(queue_family_cnt);
 			vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_family_cnt, family_properties.data());
 
 			uint32_t general_queue_index = VK_QUEUE_FAMILY_IGNORED;
@@ -475,7 +475,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 			// Find a Format that supports the requested Image Usage, preferably VK_FORMAT_B8G8R8A8_SRGB
 
-			och::heap_buffer<VkSurfaceFormatKHR> surface_formats(surface_format_cnt);
+			heap_buffer<VkSurfaceFormatKHR> surface_formats(surface_format_cnt);
 			check(vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_surface, &surface_format_cnt, surface_formats.data()));
 
 			bool format_found = false;
@@ -622,7 +622,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 	{
 		uint32_t present_mode_cnt;
 		check(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &present_mode_cnt, nullptr));
-		och::heap_buffer<VkPresentModeKHR> present_modes(present_mode_cnt);
+		heap_buffer<VkPresentModeKHR> present_modes(present_mode_cnt);
 		check(vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &present_mode_cnt, present_modes.data()));
 
 		m_swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;

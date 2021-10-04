@@ -6,7 +6,7 @@
 #include "och_fmt.h"
 #include "och_matmath.h"
 #include "och_helpers.h"
-#include "och_heap_buffer.h"
+#include "heap_buffer.h"
 
 #define USE_SIMPLEX
 

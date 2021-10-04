@@ -110,7 +110,7 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_matmath.h">
       <Filter>och_lib</Filter>
     </ClInclude>
-    <ClInclude Include="och_heap_buffer.h">
+    <ClInclude Include="heap_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="och_helpers.h">

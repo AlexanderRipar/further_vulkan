@@ -5,7 +5,7 @@
 #include <atomic>
 
 #include "och_err.h"
-#include "och_heap_buffer.h"
+#include "heap_buffer.h"
 #include "och_virtual_keys.h"
 #include "och_utf8.h"
 #include "simple_vec.h"
@@ -154,7 +154,7 @@ struct required_feature_list
 		{
 			uint32_t avl_ext_cnt;
 			check(vkEnumerateInstanceExtensionProperties(nullptr, &avl_ext_cnt, nullptr));
-			och::heap_buffer<VkExtensionProperties> avl_exts(avl_ext_cnt);
+			heap_buffer<VkExtensionProperties> avl_exts(avl_ext_cnt);
 			check(vkEnumerateInstanceExtensionProperties(nullptr, &avl_ext_cnt, avl_exts.data()));
 
 			for (uint32_t i = 0; i != m_inst_extension_cnt; ++i)
@@ -174,7 +174,7 @@ struct required_feature_list
 		{
 			uint32_t avl_layer_cnt;
 			check(vkEnumerateInstanceLayerProperties(&avl_layer_cnt, nullptr));
-			och::heap_buffer<VkLayerProperties> avl_layers(avl_layer_cnt);
+			heap_buffer<VkLayerProperties> avl_layers(avl_layer_cnt);
 			check(vkEnumerateInstanceLayerProperties(&avl_layer_cnt, avl_layers.data()));
 
 			for (uint32_t i = 0; i != m_inst_layer_cnt; ++i)
@@ -201,7 +201,7 @@ struct required_feature_list
 		{
 			uint32_t avl_ext_cnt;
 			check(vkEnumerateDeviceExtensionProperties(dev, nullptr, &avl_ext_cnt, nullptr));
-			och::heap_buffer<VkExtensionProperties> avl_exts(avl_ext_cnt);
+			heap_buffer<VkExtensionProperties> avl_exts(avl_ext_cnt);
 			check(vkEnumerateDeviceExtensionProperties(dev, nullptr, &avl_ext_cnt, avl_exts.data()));
 
 			for (uint32_t i = 0; i != m_dev_extension_cnt; ++i)
@@ -221,7 +221,7 @@ struct required_feature_list
 		{
 			uint32_t avl_layer_cnt;
 			check(vkEnumerateDeviceLayerProperties(dev, &avl_layer_cnt, nullptr));
-			och::heap_buffer<VkLayerProperties> avl_layers(avl_layer_cnt);
+			heap_buffer<VkLayerProperties> avl_layers(avl_layer_cnt);
 			check(vkEnumerateDeviceLayerProperties(dev, &avl_layer_cnt, avl_layers.data()));
 
 			for (uint32_t i = 0; i != m_dev_layer_cnt; ++i)

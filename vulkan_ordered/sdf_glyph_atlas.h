@@ -5,7 +5,7 @@
 
 #include "sdf_image.h"
 #include "truetype.h"
-#include "och_heap_buffer.h"
+#include "heap_buffer.h"
 #include "image_view.h"
 
 struct codept_range
@@ -95,11 +95,11 @@ private:
 
 	float m_line_height = 0.0F;
 
-	och::heap_buffer<uint8_t> m_image;
+	heap_buffer<uint8_t> m_image;
 
-	och::heap_buffer<mapper_range> m_map_ranges;
+	heap_buffer<mapper_range> m_map_ranges;
 
-	och::heap_buffer<glyph_index> m_map_indices;
+	heap_buffer<glyph_index> m_map_indices;
 
 public:
 
@@ -141,7 +141,7 @@ public:
 
 		// Create list of (unique) codepoints with their matching glyph ids.
 
-		och::heap_buffer<codept_id_pair> cp_ids(codept_cnt);
+		heap_buffer<codept_id_pair> cp_ids(codept_cnt);
 
 		{
 			uint32_t curr_cp_id = 0;
@@ -172,7 +172,7 @@ public:
 
 		// Create list of (unique) glyph ids
 
-		och::heap_buffer<uint32_t> ids(cp_ids.size() + 1);
+		heap_buffer<uint32_t> ids(cp_ids.size() + 1);
 
 		{
 			for (uint32_t i = 0; i != cp_ids.size(); ++i)
@@ -206,9 +206,9 @@ public:
 		const float glyph_scale = static_cast<float>(glyph_size) / static_cast<float>(padded_glyph_size);
 
 
-		och::heap_buffer<uint8_t> sdf_buffer(ids.size() * padded_glyph_size * padded_glyph_size);
+		heap_buffer<uint8_t> sdf_buffer(ids.size() * padded_glyph_size * padded_glyph_size);
 
-		och::heap_buffer<glyph_address> addresses(ids.size());
+		heap_buffer<glyph_address> addresses(ids.size());
 
 		{
 			uint32_t curr_beg = 0;
@@ -639,13 +639,13 @@ public:
 private:
 
 	template<ptrdiff_t offset, size_t bytes, bool reverse = false, typename T>
-	static void sort(och::heap_buffer<T>& input)
+	static void sort(heap_buffer<T>& input)
 	{
 		static_assert(offset + bytes <= sizeof(T));
 
 		const uint32_t sz = input.size();
 
-		och::heap_buffer<T> swap_buffer(sz);
+		heap_buffer<T> swap_buffer(sz);
 
 		for (size_t b = 0; b != bytes; ++b)
 		{
