@@ -10,7 +10,7 @@
 #include "bitmap.h"
 #include "och_timer.h"
 #include "och_fio.h"
-#include "och_vulkan_base.h"
+#include "vulkan_base.h"
 #include "och_err.h"
 #include "och_matmath.h"
 #include "och_fmt.h"
@@ -117,7 +117,7 @@ struct vulkan_tutorial
 
 
 
-	och::vulkan_context context{};
+	vulkan_context context{};
 
 
 

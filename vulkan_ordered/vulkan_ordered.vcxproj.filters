@@ -69,7 +69,7 @@
     <ClCompile Include="truetype.cpp">
       <Filter>extend_io</Filter>
     </ClCompile>
-    <ClCompile Include="och_vulkan_base.cpp">
+    <ClCompile Include="vulkan_base.cpp">
       <Filter>vulkan_base</Filter>
     </ClCompile>
     <ClCompile Include="..\..\och_lib\och_lib\och_err.cpp">
@@ -155,7 +155,7 @@
     <ClInclude Include="image_view.h">
       <Filter>extend_io</Filter>
     </ClInclude>
-    <ClInclude Include="och_vulkan_base.h">
+    <ClInclude Include="vulkan_base.h">
       <Filter>vulkan_base</Filter>
     </ClInclude>
     <ClInclude Include="..\..\och_lib\och_lib\och_err.h">

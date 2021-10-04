@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include "och_vulkan_base.h"
+#include "vulkan_base.h"
 #include "och_heap_buffer.h"
 #include "och_helpers.h"
 #include "och_matmath.h"
@@ -32,7 +32,7 @@ struct sdf_font
 	static constexpr float DISPLAY_MAX_X =  1.0F;
 	static constexpr float DISPLAY_MAX_Y =  1.0F;
 
-	och::vulkan_context context;
+	vulkan_context context;
 
 
 
@@ -56,9 +56,9 @@ struct sdf_font
 
 	VkCommandPool command_pool;
 
-	VkCommandBuffer command_buffers[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	VkCommandBuffer command_buffers[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 
-	VkFramebuffer frame_buffers[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	VkFramebuffer frame_buffers[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 
 
 
@@ -68,7 +68,7 @@ struct sdf_font
 
 	VkFence frame_inflight_fences[MAX_FRAMES_INFLIGHT];
 
-	VkFence image_inflight_fences[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
+	VkFence image_inflight_fences[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
 
 

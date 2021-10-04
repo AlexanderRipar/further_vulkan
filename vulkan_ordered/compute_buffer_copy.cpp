@@ -1,6 +1,6 @@
 #include "compute_buffer_copy.h"
 
-#include "och_vulkan_base.h"
+#include "vulkan_base.h"
 
 #include "och_timer.h"
 #include "och_fmt.h"
@@ -15,7 +15,7 @@ struct simple_compute_buffer_copy
 
 	static constexpr uint32_t COMPUTE_GROUP_SZ = 256;
 
-	och::vulkan_context context;
+	vulkan_context context;
 
 
 

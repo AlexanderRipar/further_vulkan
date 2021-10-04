@@ -2,7 +2,7 @@
 
 
 
-#include "och_vulkan_base.h"
+#include "vulkan_base.h"
 #include "och_fmt.h"
 #include "och_matmath.h"
 #include "och_helpers.h"
@@ -22,7 +22,7 @@ struct compute_image_to_swapchain
 
 
 
-	och::vulkan_context context;
+	vulkan_context context;
 
 
 
@@ -38,7 +38,7 @@ struct compute_image_to_swapchain
 
 	VkDescriptorPool descriptor_pool;
 
-	VkDescriptorSet descriptor_sets[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
+	VkDescriptorSet descriptor_sets[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
 	VkCommandPool command_pool{};
 
@@ -51,7 +51,7 @@ struct compute_image_to_swapchain
 
 	VkFence frame_inflight_fences[MAX_FRAMES_INFLIGHT]{};
 
-	VkFence image_inflight_fences[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
+	VkFence image_inflight_fences[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
 
 
@@ -155,7 +155,7 @@ struct compute_image_to_swapchain
 
 			check(vkCreateDescriptorPool(context.m_device, &descriptor_pool_ci, nullptr, &descriptor_pool));
 
-			VkDescriptorSetLayout set_layouts[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkDescriptorSetLayout set_layouts[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 			for (auto& l : set_layouts) l = descriptor_set_layout;
 
 			VkDescriptorSetAllocateInfo descriptor_set_ai{};
@@ -167,9 +167,9 @@ struct compute_image_to_swapchain
 
 			check(vkAllocateDescriptorSets(context.m_device, &descriptor_set_ai, descriptor_sets));
 
-			VkDescriptorImageInfo image_infos[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkDescriptorImageInfo image_infos[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 
-			VkWriteDescriptorSet writes[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkWriteDescriptorSet writes[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 			
 			for (uint32_t i = 0; i != context.m_swapchain_image_cnt; ++i)
 			{
@@ -429,7 +429,7 @@ struct compute_image_to_swapchain
 		{
 			check(vkResetDescriptorPool(context.m_device, descriptor_pool, 0));
 
-			VkDescriptorSetLayout set_layouts[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkDescriptorSetLayout set_layouts[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 			for (auto& l : set_layouts) l = descriptor_set_layout;
 
 			VkDescriptorSetAllocateInfo descriptor_set_ai{};
@@ -441,9 +441,9 @@ struct compute_image_to_swapchain
 
 			check(vkAllocateDescriptorSets(context.m_device, &descriptor_set_ai, descriptor_sets));
 
-			VkDescriptorImageInfo image_infos[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkDescriptorImageInfo image_infos[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 
-			VkWriteDescriptorSet writes[och::vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+			VkWriteDescriptorSet writes[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
 
 			for (uint32_t i = 0; i != context.m_swapchain_image_cnt; ++i)
 			{
