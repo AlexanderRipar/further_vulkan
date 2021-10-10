@@ -11,7 +11,7 @@
 #include "image_view.h"
 #include "bitmap.h"
 
-static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
+static void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
 {
 	constexpr float TOO_SMALL = 1e-7F;
 
@@ -73,12 +73,12 @@ static inline void cubic_poly_roots(float a3, float a2, float a1, float a0, floa
 	}
 }
 
-__forceinline och::vec2 bezier_interp(och::vec2 p0, och::vec2 p1, och::vec2 p2, float t) noexcept
+static och::vec2 bezier_interp(och::vec2 p0, och::vec2 p1, och::vec2 p2, float t) noexcept
 {
 	return (1.0F - t) * (1.0F - t) * p0 + 2.0F * (1.0F - t) * t * p1 + t * t * p2;
 }
 
-__forceinline void check_roots(float r0, float r1, float r2, och::vec2 p0, och::vec2 p1, och::vec2 p2, och::vec2 p, float& min_dst_sq, float& min_t, och::vec2& min_p)
+static void check_roots(float r0, float r1, float r2, och::vec2 p0, och::vec2 p1, och::vec2 p2, och::vec2 p, float& min_dst_sq, float& min_t, och::vec2& min_p)
 {
 	min_dst_sq = och::squared_magnitude(p - p0); // dst_b;
 
@@ -146,7 +146,7 @@ __forceinline void check_roots(float r0, float r1, float r2, och::vec2 p0, och::
 	}
 }
 
-__forceinline bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec2 p2, och::vec2 p, float& global_min_dst_sq, float& global_min_dst_sgn, float& global_min_dst_max_orthogonality)
+static bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec2 p2, och::vec2 p, float& global_min_dst_sq, float& global_min_dst_sgn, float& global_min_dst_max_orthogonality)
 {
 	const och::vec2 dp = p - p0;
 
@@ -214,7 +214,7 @@ __forceinline bool evaluate_curve_for_pixel(och::vec2 p0, och::vec2 p1, och::vec
 }
 
 template<typename Texel, typename Mapper>
-void sdf_from_glyph(image_view<Texel> img, const glyph_data& glyph, uint32_t pixel_width, uint32_t pixel_height, float glyph_scale, const Mapper& mapper)
+static void sdf_from_glyph(image_view<Texel> img, const glyph_data& glyph, uint32_t pixel_width, uint32_t pixel_height, float glyph_scale, const Mapper& mapper)
 {
 	{
 		const Texel min_texel = mapper(-1.0F);
@@ -415,16 +415,21 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 
 	truetype_file file;
 
-	check(file.create(truetype_filename));
+	{
+		check(file.create(truetype_filename));
 
-	m_line_height = file.line_height();
+		m_line_height = file.line_height();
 
-	m_glyph_scale = glyph_size;
+		m_glyph_scale = glyph_size;
+	}
+
+
+	// Count Codepoints to be mapped
 
 	uint32_t codept_cnt = 0;
 
 	for (auto& r : codept_ranges)
-		codept_cnt += r.cnt;
+		codept_cnt += r.end - r.beg;
 
 	// Create list of (unique) codepoints with their matching glyph ids.
 
@@ -434,7 +439,7 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 		uint32_t curr_cp_id = 0;
 
 		for (const auto& r : codept_ranges)
-			for (uint32_t cp = r.beg; cp != r.beg + r.cnt; ++cp)
+			for (uint32_t cp = r.beg; cp != r.end; ++cp)
 				cp_ids[curr_cp_id++].codept = cp;
 
 		sort<offsetof(codept_id_pair, codept), 3>(cp_ids);
@@ -592,7 +597,7 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 
 		m_width = map_width;
 
-		m_height = curr_y >= 1u ? curr_y : 1u;
+		m_height = curr_y + glyph_padding_pixels >= 1u ? curr_y + glyph_padding_pixels : 1u;
 
 		m_image.allocate(m_width * m_height);
 
@@ -605,7 +610,7 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 			for (uint32_t y = 0; y != a.h; ++y)
 				for (uint32_t x = 0; x != a.w; ++x)
 				{
-					uint8_t v = sdf_buffer[a.buffer_begin + x + y * padded_glyph_size];
+					const uint8_t v = sdf_buffer[a.buffer_begin + x + y * padded_glyph_size];
 
 					m_image[a.x + x + glyph_padding_pixels + (a.h + a.y + glyph_padding_pixels - y - 1) * m_width] = v;
 				}
@@ -723,9 +728,9 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 
 						glyph_metrics mtx = file.get_glyph_metrics_from_id(curr_id);
 
-						const float atlas_pos_x = a.x * inv_width;
+						const float atlas_pos_x = (a.x + glyph_padding_pixels) * inv_width;
 
-						const float atlas_pos_y = a.y * inv_height;
+						const float atlas_pos_y = (a.y + glyph_padding_pixels) * inv_height;
 
 						const float atlas_ext_x = a.w * inv_width;
 

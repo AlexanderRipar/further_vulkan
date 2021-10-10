@@ -14,7 +14,7 @@ public:
 	{
 		uint32_t beg;
 
-		uint32_t cnt;
+		uint32_t end;
 	};
 
 	struct glyph_index
