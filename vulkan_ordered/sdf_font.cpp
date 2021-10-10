@@ -267,7 +267,7 @@ struct sdf_font
 
 		// Create SDF Glyph Atlas
 		{
-			glyph_atlas::codept_range ranges[1]{ {32, 95} };
+			glyph_atlas::codept_range ranges[1]{ {32, 128} };
 
 			constexpr float clamp = 0.015625F * 2.0F;
 
