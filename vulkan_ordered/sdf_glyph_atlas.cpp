@@ -11,6 +11,8 @@
 #include "image_view.h"
 #include "bitmap.h"
 
+#define TEMP_STATUS_MACRO to_status(och::status(1, och::error_type::och))
+
 static void cubic_poly_roots(float a3, float a2, float a1, float a0, float& r0, float& r1, float& r2) noexcept
 {
 	constexpr float TOO_SMALL = 1e-7F;
@@ -579,7 +581,7 @@ och::status glyph_atlas::create(const char* truetype_filename, uint32_t glyph_si
 			uint32_t padded_h = a.h + glyph_padding_pixels;
 
 			if (padded_w > map_width - glyph_padding_pixels)
-				return msg_error("Glyph too large for given map_width parameter");
+				return TEMP_STATUS_MACRO; // Glyph too large for given map_width parameter
 
 			if (curr_x + padded_w > map_width - glyph_padding_pixels)
 			{
@@ -793,7 +795,7 @@ och::status glyph_atlas::save_glfatl(const char* filename, bool overwrite_existi
 
 	och::mapped_file<glfatl_fileheader> file;
 
-	check(file.create(filename, och::fio::access::readwrite, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, total_file_bytes));
+	check(file.create(filename, och::fio::access::read_write, overwrite_existing_file ? och::fio::open::truncate : och::fio::open::fail, och::fio::open::normal, total_file_bytes));
 
 	// Layout: m_width, m_height, m_map_ranges.size(), m_map_indices.size(), m_map_ranges, m_map_indices, m_image
 

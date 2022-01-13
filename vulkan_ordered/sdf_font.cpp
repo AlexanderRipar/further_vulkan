@@ -1,5 +1,7 @@
 #include "sdf_font.h"
 
+#include "directory_constants.h"
+
 #include <cmath>
 
 #include "vulkan_base.h"
@@ -113,7 +115,7 @@ struct sdf_font
 
 
 
-	och::status create()
+	och::status create(int argc, const char** argv)
 	{
 		check(context.create("Compute Font", 1440, 810, 1, 0, 0));
 
@@ -203,9 +205,9 @@ struct sdf_font
 
 		// Create Graphics Pipeline
 		{
-			check(context.load_shader_module_file(vert_shader_module, "shaders/sdf_font.vert.spv"));
+			check(context.load_shader_module_file(vert_shader_module, OCH_DIR "shaders/sdf_font.vert.spv"));
 
-			check(context.load_shader_module_file(frag_shader_module, "shaders/sdf_font.frag.spv"));
+			check(context.load_shader_module_file(frag_shader_module, OCH_DIR "shaders/sdf_font.frag.spv"));
 
 			VkDescriptorSetLayoutBinding descriptor_binding{};
 			// Font SDF-Atlas
@@ -267,18 +269,66 @@ struct sdf_font
 
 		// Create SDF Glyph Atlas
 		{
+			char ttf_filename_buffer[260];
+
+			const char* ttf_filename = "C:/Windows/Fonts/calibri.ttf";
+
+			const char* cache_filename = nullptr;
+
+			const char* bmp_filename = nullptr;
+
+			if (argc >= 3)
+			{
+				bool is_name_only = true;
+
+				for(uint32_t i = 0; argv[2][i]; ++i)
+					if (argv[2][i] == '/' || argv[2][i] == '\\')
+					{
+						is_name_only = false;
+
+						break;
+					}
+
+				if (is_name_only)
+				{
+					memcpy(ttf_filename_buffer, "C:/Windows/Fonts/", 18);
+
+					uint32_t i = 0;
+
+					for (; i != 260 && argv[2][i]; ++i)
+						ttf_filename_buffer[i + 17] = argv[2][i];
+
+					ttf_filename_buffer[i + 17] = '\0';
+
+					ttf_filename = ttf_filename_buffer;
+				}
+				else
+					ttf_filename = argv[2];
+			}
+
+			och::print("Reading font file {}\n", ttf_filename);
+
+			if (argc >= 4)
+				cache_filename = argv[3];
+
+			if (argc == 5)
+				bmp_filename = argv[4];
+
+
 			glyph_atlas::codept_range ranges[1]{ {32, 128} };
 
 			constexpr float clamp = 0.015625F * 2.0F;
 
-			if (atlas.load_glfatl("textures/renderer_atlas.glfatl"))
+			if (!cache_filename || atlas.load_glfatl(cache_filename))
 			{
-				check(atlas.create("C:/Windows/Fonts/calibri.ttf", 64, 2, clamp, 1024, och::range(ranges)));
+				check(atlas.create(ttf_filename, 64, 2, clamp, 1024, och::range(ranges)));
 
-				check(atlas.save_glfatl("textures/renderer_atlas.glfatl", true));
-
-				check(atlas.save_bmp("textures/renderer_atlas.bmp", true));
+				if(cache_filename)
+					check(atlas.save_glfatl(cache_filename, true));
 			}
+
+			if (bmp_filename)
+				check(atlas.save_bmp(bmp_filename, true));
 		}
 
 		// Allocate Device Image and Imageview to hold SDF Glyph Atlas
@@ -1178,11 +1228,11 @@ struct sdf_font
 	}
 };
 
-och::status run_sdf_font()
+och::status run_sdf_font(int argc, const char** argv)
 {
 	sdf_font program{};
 
-	och::status err = program.create();
+	och::status err = program.create(argc, argv);
 
 	if (!err)
 		err = program.run();

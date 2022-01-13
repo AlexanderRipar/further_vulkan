@@ -10,6 +10,8 @@
 #include "och_utf8.h"
 #include "simple_vec.h"
 
+#define TEMP_STATUS_MACRO to_status(och::status(1, och::error_type::och))
+
 enum class key_event : uint8_t
 {
 	held = 0,
@@ -89,7 +91,7 @@ struct required_feature_list
 	och::status add_instance_extensions(const char** exts, uint32_t cnt)
 	{
 		if (m_inst_extension_cnt + cnt > max_cnt)
-			return msg_error("Too many instance extensions requested");
+			return TEMP_STATUS_MACRO;
 
 		for (uint32_t i = 0; i != cnt; ++i)
 			m_inst_extensions[m_inst_extension_cnt++] = exts[i];
@@ -100,7 +102,7 @@ struct required_feature_list
 	och::status add_instance_layers(const char** layers, uint32_t cnt)
 	{
 		if (m_inst_layer_cnt + cnt > max_cnt)
-			return msg_error("Too many instance layers requested");
+			return TEMP_STATUS_MACRO;
 
 		for (uint32_t i = 0; i != cnt; ++i)
 			m_inst_layers[m_inst_layer_cnt++] = layers[i];
@@ -111,7 +113,7 @@ struct required_feature_list
 	och::status add_device_extensions(const char** exts, uint32_t cnt)
 	{
 		if (m_dev_extension_cnt + cnt > max_cnt)
-			return msg_error("Too many device extensions requested");
+			return TEMP_STATUS_MACRO;
 
 		for (uint32_t i = 0; i != cnt; ++i)
 			m_dev_extensions[m_dev_extension_cnt++] = exts[i];
@@ -122,7 +124,7 @@ struct required_feature_list
 	och::status add_device_layers(const char** layers, uint32_t cnt)
 	{
 		if (m_dev_layer_cnt + cnt > max_cnt)
-			return msg_error("Too many device layers requested");
+			return TEMP_STATUS_MACRO;
 
 		for (uint32_t i = 0; i != cnt; ++i)
 			m_dev_layers[m_dev_layer_cnt++] = layers[i];
@@ -388,6 +390,8 @@ struct vulkan_context
 	och::status begin_onetime_command(VkCommandBuffer& out_command_buffer, VkCommandPool command_pool) const noexcept;
 
 	och::status submit_onetime_command(VkCommandBuffer command_buffer, VkCommandPool command_pool, VkQueue submit_queue, bool wait_and_free = true) const noexcept;
+
+	och::status create_buffer(VkBuffer& out_buffer, VkDeviceMemory& out_memory, VkDeviceSize bytes, VkBufferUsageFlags buffer_usage, VkMemoryPropertyFlags memory_properties, VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_idx_cnt = 0, const uint32_t* queue_family_indices = nullptr) const noexcept;
 
 
 	och::status begin_message_processing() noexcept;

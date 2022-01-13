@@ -123,7 +123,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);OCH_VALIDATE;OCH_USING_VULKAN;OCH_ERROR_CONTEXT_NORMAL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);OCH_VALIDATE;OCH_USING_VULKAN;OCH_ERROR_CONTEXT_NORMAL;OCH_ERROR_CONTEXT_EXTENDED</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>C:\VulkanSDK\1.2.176.1\Include;C:\Users\alex_2\Documents\_Programming\libraries\glfw-3.3.4.bin.WIN64\include;C:\Users\alex_2\source\repos\och_lib\och_lib;C:\Users\alex_2\Documents\_Programming\libraries\glm\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -190,7 +190,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);OCH_VALIDATE;OCH_USING_VULKAN;OCH_ERROR_CONTEXT_NORMAL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);OCH_VALIDATE;OCH_USING_VULKAN;OCH_ERROR_CONTEXT_EXTENDED</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>C:\VulkanSDK\1.2.176.1\Include;C:\Users\alex_2\Documents\_Programming\libraries\glfw-3.3.4.bin.WIN64\include;C:\Users\alex_2\source\repos\och_lib\och_lib;C:\Users\alex_2\Documents\_Programming\libraries\glm\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -226,6 +226,8 @@
     <ClCompile Include="..\..\och_lib\och_lib\och_fmt.cpp" />
     <ClCompile Include="..\..\och_lib\och_lib\och_time.cpp" />
     <ClCompile Include="..\..\och_lib\och_lib\och_utf8.cpp" />
+    <ClCompile Include="gpu_info.cpp" />
+    <ClCompile Include="help.cpp" />
     <ClCompile Include="sdf_font.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="compute_to_swapchain.cpp" />
@@ -249,6 +251,9 @@
     <ClInclude Include="..\..\och_lib\och_lib\och_utf8.h" />
     <ClInclude Include="..\..\och_lib\och_lib\och_virtual_keys.h" />
     <ClInclude Include="bitmap.h" />
+    <ClInclude Include="directory_constants.h" />
+    <ClInclude Include="gpu_info.h" />
+    <ClInclude Include="help.h" />
     <ClInclude Include="image_view.h" />
     <ClInclude Include="sdf_glyph_atlas.h" />
     <ClInclude Include="simple_vec.h" />
@@ -279,6 +284,7 @@
     <None Include="shaders\tutorial.frag.spv" />
     <None Include="shaders\tutorial.vert" />
     <None Include="shaders\tutorial.vert.spv" />
+    <None Include="shaders\voxel_volume_trace.comp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

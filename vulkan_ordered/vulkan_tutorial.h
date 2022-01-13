@@ -2,4 +2,4 @@
 
 #include "och_err.h"
 
-och::status run_vulkan_tutorial() noexcept;
+och::status run_vulkan_tutorial(int argc, const char** argv) noexcept;

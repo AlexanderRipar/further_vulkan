@@ -1,0 +1,119 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+
+
+
+
+layout (local_size_x_id = 1) in;
+layout (local_size_y_id = 2) in;
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout (constant_id = 3) const uint LAYER_DIM_L2 = 8;
+layout (constant_id = 4) const uint LAYER_CNT = 1;
+layout (constant_id = 5) const uint BRICK_DIM_L2 = 5;
+
+layout (set = 0, binding = 0, r32ui) uniform readonly uimage3D layer;
+
+layout (set = 0, binding = 1, r16ui) uniform readonly uimage3D bricks[];
+
+layout (set = 0, binding = 2, r16ui) uniform coherent writeonly uimage2D hit_ids;
+
+layout (set = 0, binding = 3, r32f) uniform coherent writeonly image2D hit_times;
+
+layout(push_constant) uniform Push_data {
+	vec3 origin;
+	uvec2 render_extent;
+	vec2 direction_delta;
+	mat3 direction_rotation;
+} push_data;
+
+
+
+
+
+vec3 calculate_direction(in vec2 invocation)
+{
+	vec2 invocation_centered = vec2(invocation - push_data.render_extent / 2) + 0.5;
+
+	vec3 base_direction = vec3(push_data.direction_delta * invocation_centered, -1.0);
+
+	vec3 normalized_direction = normalize(base_direction);
+
+	return normalized_direction * push_data.direction_rotation;
+}
+
+vec3 calculate_initial_ray_time(vec3 inv_ray_dir)
+{
+	vec3 negative_adjustment = vec3(inv_ray_dir.x < 0.0, inv_ray_dir.y < 0.0, inv_ray_dir.z < 0.0);
+
+	vec3 offset = fract(negative_adjustment - push_data.origin.xyz);
+
+	return offset * inv_ray_dir;
+}
+
+void main()
+{
+	// Check if we are inside the image
+
+	ivec2 invocation = ivec2(gl_GlobalInvocationID.xy);
+
+	if (invocation.x > push_data.render_extent.x || invocation.y > push_data.render_extent.y)
+		return;
+
+	
+
+	// Get ray parameters
+
+	vec3 ray_dir = calculate_direction(invocation);
+	
+	vec3 inv_ray_dir = 1.0 / ray_dir;
+
+	ivec3 ray_brick = ivec3(push_data.origin.xyz) >> BRICK_DIM_L2;
+
+	vec3 ray_step = abs(inv_ray_dir);
+
+	ivec3 ray_sign = ivec3(sign(ray_dir));
+
+	vec3 ray_time = calculate_initial_ray_time(inv_ray_dir);
+
+
+
+	// Start a-looping
+
+	while (max(max(uint(ray_brick.x), uint(ray_brick.y)), uint(ray_brick.z)) < 1 << LAYER_DIM_L2)
+	{
+		float min_time = min(min(ray_time.x, ray_time.y), ray_time.z);
+
+		uint brick_value = imageLoad(layer, ray_brick).x;
+
+		if (brick_value != ~0u)
+		{
+			imageStore(hit_ids, invocation, uvec4(brick_value, 0u, 0u, 0u));
+
+			imageStore(hit_times, invocation, vec4(min_time, 0.0, 0.0, 0.0));
+
+			return;
+		}
+
+		if (min_time == ray_time.x)
+		{
+			ray_time.x += ray_step.x;
+			ray_brick.x += ray_sign.x;
+		}
+		else if (min_time == ray_time.y)
+		{
+			ray_time.y += ray_step.y;
+			ray_brick.y += ray_sign.y;
+		}
+		else
+		{
+			ray_time.z += ray_step.z;
+			ray_brick.z += ray_sign.z;
+		}
+	}
+
+	imageStore(hit_ids, invocation, uvec4(0u, 0u, 0u, 0u));
+
+	imageStore(hit_times, invocation, vec4(intBitsToFloat(0x7F800000), 0.0, 0.0, 0.0));
+}

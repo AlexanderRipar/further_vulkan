@@ -36,6 +36,12 @@
     <Filter Include="samples\voxel_volume">
       <UniqueIdentifier>{66d9618e-945f-4c9f-a384-0ca71ef023f2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="samples\help">
+      <UniqueIdentifier>{876827ff-b0a0-4dfa-9632-be12fa750af7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="samples\gpu_info">
+      <UniqueIdentifier>{4fad1ff0-14a4-4587-b88a-3709307c1b5e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -79,6 +85,12 @@
     </ClCompile>
     <ClCompile Include="voxel_volume.cpp">
       <Filter>samples\voxel_volume</Filter>
+    </ClCompile>
+    <ClCompile Include="help.cpp">
+      <Filter>samples\help</Filter>
+    </ClCompile>
+    <ClCompile Include="gpu_info.cpp">
+      <Filter>samples\gpu_info</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -157,6 +169,15 @@
     <ClInclude Include="voxel_volume.h">
       <Filter>samples\voxel_volume</Filter>
     </ClInclude>
+    <ClInclude Include="help.h">
+      <Filter>samples\help</Filter>
+    </ClInclude>
+    <ClInclude Include="directory_constants.h">
+      <Filter>helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu_info.h">
+      <Filter>samples\gpu_info</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\msvc_compile_shaders.bat">
@@ -203,6 +224,9 @@
     </None>
     <None Include="shaders\sdf_font.frag.spv">
       <Filter>samples\sdf_font</Filter>
+    </None>
+    <None Include="shaders\voxel_volume_trace.comp">
+      <Filter>samples\voxel_volume</Filter>
     </None>
   </ItemGroup>
 </Project>

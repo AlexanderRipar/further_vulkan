@@ -95,7 +95,7 @@ public:
 
 		const uint32_t mapping_size = new_width && new_height ? bitmap_header::stride(new_width) * new_height + image_data_offset : 0;
 
-		check(m_file.create(filename, och::fio::access::readwrite, existing_mode, new_mode, mapping_size));
+		check(m_file.create(filename, och::fio::access::read_write, existing_mode, new_mode, mapping_size));
 
 		if (m_file[0].image_offset)
 		{

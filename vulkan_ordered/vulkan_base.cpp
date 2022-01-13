@@ -7,6 +7,8 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include "och_err.h"
+
 #include <vulkan/vulkan_win32.h>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
@@ -252,7 +254,7 @@ DWORD message_pump_thread_fn(void* data)
 och::status vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
 {
 	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
-		return msg_error("Too many queues requested");
+		return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
 	m_app_name = app_name;
 
@@ -260,13 +262,13 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 	{
 		// Create an auto-reset event for the thread to indicate it has completed its window creation
 		if (HANDLE wait_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !wait_event)
-			return msg_error("Failed to create wait event");
+			return to_status(HRESULT_FROM_WIN32(GetLastError()));
 		else
 			m_message_pump_initialization_wait_event = wait_event;
 
 		// Create an auto-reset event to signal the message pump thread once it should start pumping messages
 		if (HANDLE continue_event = CreateEventW(nullptr, FALSE, FALSE, nullptr); !continue_event)
-			return msg_error("Failed to create wait event");
+			return to_status(HRESULT_FROM_WIN32(GetLastError()));
 		else
 			m_message_pump_start_wait_event = continue_event;
 
@@ -287,7 +289,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 			m_message_pump_thread_id = 0;
 
-			return msg_error("Could not create thread");
+			return to_status(HRESULT_FROM_WIN32(GetLastError()));
 		}
 
 		m_message_pump_thread_handle = thread_handle;
@@ -308,10 +310,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			else
 				och::print("Message Pump Thread exited with 0x{:X}\n", static_cast<uint32_t>(exit_code));
 
-			if (wait_result == WAIT_TIMEOUT)
-				return msg_error("Wait on window creation timed out");
-			else if (wait_result)
-				return msg_error("Wait on window creation failed");
+			return to_status(HRESULT_FROM_WIN32(wait_result));
 		}
 	}
 
@@ -336,7 +335,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 		check(s_feats.check_instance_support(supports_extensions));
 
 		if (!supports_extensions)
-			return msg_error("Not all required instance extensions / layers are supported");
+			return to_status(VK_ERROR_EXTENSION_NOT_PRESENT);
 
 		VkInstanceCreateInfo instance_ci{};
 		instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -361,7 +360,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			check(create_fn(m_instance, &messenger_ci, nullptr, &m_debug_messenger));
 		}
 		else
-			return msg_error("Could not load function vkCreateDebugUtilsMessengerEXT");
+			return to_status(VK_ERROR_UNKNOWN);
 
 #endif // OCH_VALIDATE
 	}
@@ -530,7 +529,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			goto DEVICE_SELECTED;
 		}
 
-		return msg_error("Could not locate a suitable physical device");
+		return to_status(VK_ERROR_UNKNOWN);
 
 	DEVICE_SELECTED:;
 	}
@@ -662,7 +661,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 		if (surface_capabilites.minImageCount == MAX_SWAPCHAIN_IMAGE_CNT || surface_capabilites.maxImageCount == surface_capabilites.minImageCount)
 			--requested_img_cnt;
 		else if (surface_capabilites.minImageCount > MAX_SWAPCHAIN_IMAGE_CNT)
-			return msg_error("Minimum number of images supported by swapchain exceeds engine's maximum");
+			return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
 		VkSwapchainCreateInfoKHR swapchain_ci{};
 		swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -692,7 +691,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
 		if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
-			return msg_error("Created swapchain contains too many images");
+			return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
 	}
@@ -735,19 +734,23 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 void vulkan_context::destroy() const noexcept
 {
 	for (uint32_t i = 0; i != m_swapchain_image_cnt; ++i)
-		vkDestroyImageView(m_device, m_swapchain_image_views[i], nullptr);
+		if(m_swapchain_images[i])
+			vkDestroyImageView(m_device, m_swapchain_image_views[i], nullptr);
 
-	vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+	if(m_swapchain)
+		vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 
-	vkDestroyDevice(m_device, nullptr);
+	if(m_device)
+		vkDestroyDevice(m_device, nullptr);
 
-	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+	if(m_surface)
+		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 
 #ifdef OCH_VALIDATE
 
 	// If m_instance is null at this point, this cleanup must be the result of a failed initialization, 
 	// and m_debug_messenger cannot have been created yet either. Hence, we skip this to avoid loader issues.
-	if (m_instance)
+	if (m_instance && m_debug_messenger)
 	{
 		auto destroy_fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT"));
 
@@ -759,7 +762,8 @@ void vulkan_context::destroy() const noexcept
 
 #endif // OCH_VALIDATE
 
-	vkDestroyInstance(m_instance, nullptr);
+	if(m_instance)
+		vkDestroyInstance(m_instance, nullptr);
 
 	DestroyWindow(static_cast<HWND>(m_hwnd));
 
@@ -823,7 +827,7 @@ och::status vulkan_context::recreate_swapchain() noexcept
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, nullptr));
 
 		if (m_swapchain_image_cnt > MAX_SWAPCHAIN_IMAGE_CNT)
-			return msg_error("Recreated swapchain contains too many images");
+			return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
 		check(vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_image_cnt, m_swapchain_images));
 	}
@@ -865,7 +869,7 @@ och::status vulkan_context::suitable_memory_type_idx(uint32_t& out_memory_type_i
 
 	out_memory_type_idx = 0;
 
-	return msg_error("Could not find suitable memory type index");
+	return to_status(VK_ERROR_FORMAT_NOT_SUPPORTED);
 }
 
 och::status vulkan_context::load_shader_module_file(VkShaderModule& out_shader_module, const char* filename) const noexcept
@@ -928,10 +932,45 @@ och::status vulkan_context::submit_onetime_command(VkCommandBuffer command_buffe
 	return {};
 }
 
+och::status vulkan_context::create_buffer(VkBuffer& out_buffer, VkDeviceMemory& out_memory, VkDeviceSize bytes, VkBufferUsageFlags buffer_usage, VkMemoryPropertyFlags memory_properties, VkSharingMode sharing_mode, uint32_t queue_family_idx_cnt, const uint32_t* queue_family_indices) const noexcept
+{
+	VkBufferCreateInfo buffer_ci{};
+	buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_ci.pNext = nullptr;
+	buffer_ci.flags = 0;
+	buffer_ci.size = bytes;
+	buffer_ci.usage = buffer_usage;
+	buffer_ci.sharingMode = sharing_mode;
+	buffer_ci.queueFamilyIndexCount = queue_family_idx_cnt;
+	buffer_ci.pQueueFamilyIndices = queue_family_indices;
+
+	check(vkCreateBuffer(m_device, &buffer_ci, nullptr, &out_buffer));
+
+	VkMemoryRequirements mem_reqs{};
+	vkGetBufferMemoryRequirements(m_device, out_buffer, &mem_reqs);
+
+	uint32_t buffer_memory_type_idx;
+	check(suitable_memory_type_idx(buffer_memory_type_idx, mem_reqs.memoryTypeBits, memory_properties));
+
+	VkMemoryAllocateInfo memory_ai{};
+	memory_ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memory_ai.pNext = nullptr;
+	memory_ai.allocationSize = mem_reqs.size;
+	memory_ai.memoryTypeIndex = buffer_memory_type_idx;
+
+	check(vkAllocateMemory(m_device, &memory_ai, nullptr, &out_memory));
+
+	check(vkBindBufferMemory(m_device, out_buffer, out_memory, 0));
+
+	return {};
+}
+
+
+
 och::status vulkan_context::begin_message_processing() noexcept
 {
 	if (!SetEvent(m_message_pump_start_wait_event))
-		return msg_error("Failed to signal message pump start event");
+		return to_status(HRESULT_FROM_WIN32(GetLastError()));
 
 	return {};
 }

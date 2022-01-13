@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#define TEMP_STATUS_MACRO to_status(och::status(1, och::error_type::och))
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 /*///////////////////////////////////////// Big Endian to Little Endian /////////////////////////////////////////*/
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
@@ -239,7 +241,7 @@ och::status truetype_file::create(const char* filename) noexcept
 {
 	m_flags.is_valid_file = false;
 
-	check(m_file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail, 0, 0, och::fio::share::read_write_delete));
+	check(m_file.create(filename, och::fio::access::read, och::fio::open::normal, och::fio::open::fail, 0, 0, och::fio::share::read_write_remove));
 
 	// Load tables
 
@@ -260,10 +262,10 @@ och::status truetype_file::create(const char* filename) noexcept
 	const cmap_table_data* cmap_tbl = static_cast<const cmap_table_data*>(get_table("cmap"));
 
 	if (!maxp_tbl || !head_tbl || !hhea_tbl || !cmap_tbl || !m_loca_tbl || !m_glyf_tbl || !m_hmtx_tbl)
-		return msg_error("Could not find all necessary ttf-tables");
+		return TEMP_STATUS_MACRO; // Could not find all necessary ttf - tables
 
 	if (!(m_codepoint_mapper = query_codepoint_mapping(cmap_tbl)).data)
-		return msg_error("Could not find supported codepoint-to-glyph mapping");
+		return TEMP_STATUS_MACRO; // Could not find supported codepoint - to - glyph mapping
 
 	m_flags.full_glyph_offsets = head_tbl->index_to_loc_format;
 
@@ -983,7 +985,6 @@ void truetype_file::internal_glyph_data::transform(float xx, float xy, float yx,
 	for (uint32_t i = 0; i != point_cnt; ++i)
 		m_points[i] = t * m_points[i];
 }
-
 
 
 

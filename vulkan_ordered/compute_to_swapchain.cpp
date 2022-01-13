@@ -1,6 +1,6 @@
 #include "compute_to_swapchain.h"
 
-
+#include "directory_constants.h"
 
 #include "vulkan_base.h"
 #include "och_fmt.h"
@@ -102,7 +102,7 @@ struct compute_image_to_swapchain
 
 			check(vkCreatePipelineLayout(context.m_device, &pipeline_layout_ci, nullptr, &pipeline_layout));
 
-			check(context.load_shader_module_file(shader_module, is_using_simplex ? "shaders/simplex3d.comp.spv" : "shaders/swapchain.comp.spv"));
+			check(context.load_shader_module_file(shader_module, is_using_simplex ? OCH_DIR "shaders/simplex3d.comp.spv" : OCH_DIR "shaders/swapchain.comp.spv"));
 
 			struct { uint32_t x, y, z; } group_size{ GROUP_SZ_X, GROUP_SZ_Y, GROUP_SZ_Z };
 
