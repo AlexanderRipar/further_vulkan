@@ -1,7 +1,10 @@
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\tutorial.vert      -o     shaders\tutorial.vert.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\tutorial.frag      -o     shaders\tutorial.frag.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\buffer_copy.comp   -o     shaders\buffer_copy.comp.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\swapchain.comp     -o     shaders\swapchain.comp.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\simplex3d.comp     -o     shaders\simplex3d.comp.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\sdf_font.frag      -o     shaders\sdf_font.frag.spv
-C:\VulkanSDK\1.2.176.1\Bin\glslc.exe     shaders\sdf_font.vert      -o     shaders\sdf_font.vert.spv
+CD shaders
+
+glslc.exe   tutorial.vert             -O   -o tutorial.vert.spv
+glslc.exe   tutorial.frag             -O   -o tutorial.frag.spv
+glslc.exe   buffer_copy.comp          -O   -o buffer_copy.comp.spv
+glslc.exe   swapchain.comp            -O   -o swapchain.comp.spv
+glslc.exe   simplex3d.comp            -O   -o simplex3d.comp.spv
+glslc.exe   sdf_font.frag             -O   -o sdf_font.frag.spv
+glslc.exe   sdf_font.vert             -O   -o sdf_font.vert.spv
+glslc.exe   voxel_volume_trace.comp   -O   -o voxel_volume_trace.comp.spv
