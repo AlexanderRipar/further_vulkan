@@ -11,6 +11,7 @@
 #include "voxel_volume.h"
 #include "gpu_info.h"
 
+#include <Windows.h>
 
 
 enum class sample_type
@@ -39,6 +40,12 @@ const char* sample_names[]
 
 int main(int argc, const char** argv)
 {
+	char curr_dir[1024];
+
+	GetCurrentDirectoryA(sizeof(curr_dir), curr_dir);
+
+	och::print("Current Directory: {}\n", curr_dir);
+
 	sample_type to_run = sample_type::none;
 
 	if (argc > 1)

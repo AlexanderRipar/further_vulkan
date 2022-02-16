@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -270,16 +270,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\buffer_copy.comp" />
-    <None Include="shaders\buffer_copy.comp.spv" />
     <None Include="shaders\msvc_compile_shaders.bat" />
     <None Include="shaders\sdf_font.frag" />
-    <None Include="shaders\sdf_font.frag.spv" />
     <None Include="shaders\sdf_font.vert" />
-    <None Include="shaders\sdf_font.vert.spv" />
     <None Include="shaders\simplex3d.comp" />
-    <None Include="shaders\simplex3d.comp.spv" />
+    <None Include="shaders\simplex3d_slice.comp" />
     <None Include="shaders\swapchain.comp" />
-    <None Include="shaders\swapchain.comp.spv" />
     <None Include="shaders\tutorial.frag" />
     <None Include="shaders\tutorial.frag.spv" />
     <None Include="shaders\tutorial.vert" />

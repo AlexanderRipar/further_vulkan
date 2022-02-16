@@ -2,9 +2,15 @@
 
 struct texel_b8g8r8
 {
-	uint8_t r;
-	uint8_t g;
 	uint8_t b;
+	uint8_t g;
+	uint8_t r;
+
+	constexpr texel_b8g8r8() noexcept = default;
+
+	constexpr texel_b8g8r8(uint8_t b, uint8_t g, uint8_t r) noexcept : b{ b }, g{ g }, r{ r } {}
+
+	constexpr explicit texel_b8g8r8(uint8_t l) noexcept : b{ l }, g{ l }, r{ l } {}
 };
 
 namespace col

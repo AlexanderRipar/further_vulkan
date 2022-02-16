@@ -2,136 +2,150 @@
 
 #include "vulkan_base.h"
 
-#include "och_fmt.h"
-
-#define TEMP_STATUS_MACRO to_status(och::status(1, och::error_type::och))
-
-och::status parse_numeric_argument(uint32_t& out_number, const char* arg, bool must_be_pow2, bool must_be_nonzero) noexcept
-{
-	uint32_t n = 0;
-
-	for (const char* curr = arg; *curr; ++curr)
-		if (*curr > '9' || *curr < '0')
-			return TEMP_STATUS_MACRO; // Argument must be numeric
-		else
-			n = n * 10 + *curr - '0';
-
-	if (n == 0 && must_be_nonzero)
-		return TEMP_STATUS_MACRO; // Argument must not be zero
-
-	out_number = n;
-
-	if (!must_be_pow2)
-		return {};
-
-	for (uint32_t i = 0; i != 32; ++i)
-		if ((n & (1 << i)))
-			if ((n & ~(1 << i)))
-				return TEMP_STATUS_MACRO; // Argument must be a power of two
-			else
-				break;
-
-	return {};
-}
-
 struct voxel_volume
 {
-	using brick_element_t = uint16_t;
+	static constexpr uint32_t MAX_FRAMES_INFLIGHT = 2;
 
-	using layer_element_t = uint32_t;
 
-	static constexpr uint32_t MAX_LAYER_COUNT = 8;
 
-	static constexpr uint32_t MAX_BRICK_BYTES = 1u << 31;
+	using base_elem_t = uint16_t;
 
-	vulkan_context context;
+	using brick_elem_t = uint32_t;
 
-	VkBuffer layer_buffer;
+	using leaf_elem_t = uint16_t;
 
-	VkDeviceMemory layer_memory;
+	static constexpr uint32_t LEVEL_CNT = 3;
+
+	static constexpr uint32_t BASE_DIM_LOG2 = 6;
+
+	static constexpr uint32_t BRICK_DIM_LOG2 = 4;
+
+	static constexpr uint32_t BASE_DIM = 1 << BASE_DIM_LOG2;
+
+	static constexpr uint32_t BRICK_DIM = 1 << BRICK_DIM_LOG2;
+
+	static constexpr uint32_t BASE_VOL = BASE_DIM * BASE_DIM * BASE_DIM;
+
+	static constexpr uint32_t BRICK_VOL = BRICK_DIM * BRICK_DIM * BRICK_DIM;
+
+	static constexpr float BASE_OCCUPANCY = 0.0625F;
+
+	static constexpr float BRICK_OCCUPANCY = 0.5F;
+
+	static constexpr uint32_t OCCUPIED_BRICKS = static_cast<uint32_t>(BASE_VOL * LEVEL_CNT * BASE_OCCUPANCY);
+
+	static constexpr uint32_t BRICK_BYTES = OCCUPIED_BRICKS * BRICK_VOL * sizeof(brick_elem_t);
+
+	static constexpr uint32_t OCCUPIED_LEAVES = static_cast<uint32_t>(OCCUPIED_BRICKS * BRICK_VOL * BRICK_OCCUPANCY);
+
+	static constexpr uint32_t LEAF_BYTES = OCCUPIED_LEAVES * 8 * sizeof(leaf_elem_t);
+
+
+
+	vulkan_context ctx;
+
+
+
+	VkImage base_image;
+
+	VkImageView base_image_view;
+
+	VkDeviceMemory base_image_memory;
 
 	VkBuffer brick_buffer;
 
 	VkDeviceMemory brick_memory;
 
-	och::status create(int argc, const char** argv) noexcept
+	VkBuffer leaf_buffer;
+
+	VkDeviceMemory leaf_memory;
+
+
+
+	VkImage hit_index_images[MAX_FRAMES_INFLIGHT];
+
+	VkImageView hit_index_image_views[MAX_FRAMES_INFLIGHT];
+
+	VkDeviceMemory hit_index_memory;
+
+	VkImage hit_times_images[MAX_FRAMES_INFLIGHT];
+
+	VkImageView hit_times_image_views[MAX_FRAMES_INFLIGHT];
+
+	VkDeviceMemory hit_times_memory;
+
+	och::status create() noexcept
 	{
-		check(context.create("Voxel Volume", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
-		
-		uint32_t brick_size = 32;
+		check(ctx.create("Voxel Volume", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
 
-		uint32_t layer_size = 256;
+		// Create Base Image
+		check(ctx.create_image_with_view(base_image_view, base_image, base_image_memory, 
+			{ BASE_DIM * LEVEL_CNT, BASE_DIM, BASE_DIM },
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+			VK_IMAGE_TYPE_3D, 
+			VK_IMAGE_VIEW_TYPE_3D, 
+			VK_FORMAT_R16_UINT, 
+			VK_FORMAT_R16_UINT, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
-		uint32_t layer_count = 4;
+		// Allocate Brick buffer
+		check(ctx.create_buffer(brick_buffer, brick_memory, BRICK_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
-		uint32_t max_brick_count;
+		// Allocate Leaf buffer
+		check(ctx.create_buffer(leaf_buffer, leaf_memory, LEAF_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
-		if (argc >= 3)
-			check(parse_numeric_argument(brick_size, argv[2], true, true));
+		// Allocate hit index images
+		check(ctx.create_images_with_views(
+			MAX_FRAMES_INFLIGHT,
+			hit_index_image_views, hit_index_images, hit_index_memory,
+			{ ctx.m_swapchain_extent.width, ctx.m_swapchain_extent.height, 1 },
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			VK_IMAGE_USAGE_STORAGE_BIT,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_VIEW_TYPE_2D,
+			VK_FORMAT_R16_UINT,
+			VK_FORMAT_R16_UINT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
-		if (argc >= 4)
-			check(parse_numeric_argument(layer_size, argv[3], true, true));
+		// Allocate hit times images
+		check(ctx.create_images_with_views(
+			MAX_FRAMES_INFLIGHT,
+			hit_index_image_views, hit_index_images, hit_index_memory,
+			{ ctx.m_swapchain_extent.width, ctx.m_swapchain_extent.height, 1 },
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			VK_IMAGE_USAGE_STORAGE_BIT,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_VIEW_TYPE_2D,
+			VK_FORMAT_R32_SFLOAT,
+			VK_FORMAT_R32_SFLOAT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
-		if (argc >= 5)
-			check(parse_numeric_argument(layer_count, argv[4], false, true));
+		return {};
+	}
 
-		if (argc >= 6)
-		{
-			check(parse_numeric_argument(max_brick_count, argv[6], false, true));
-		}
-		else
-		{
-			max_brick_count = MAX_BRICK_BYTES / (brick_size * brick_size * brick_size * sizeof(brick_element_t));
-		}
+	och::status destroy() noexcept
+	{
 
-		if (brick_size > layer_size)
-			return TEMP_STATUS_MACRO; // Brick size cannot be greater than layer size
-
-		if (layer_count > MAX_LAYER_COUNT)
-			return TEMP_STATUS_MACRO; // Maximal layer count exceeded
-
-		uint32_t bricks_per_layer = layer_size / brick_size;
-
-		VkDeviceSize layer_bytes = static_cast<VkDeviceSize>(layer_count) * layer_size * layer_size * layer_size * sizeof(layer_element_t);
-
-		VkDeviceSize brick_bytes = static_cast<VkDeviceSize>(max_brick_count) * brick_size * brick_size * brick_size * sizeof(brick_element_t);
-
-		och::print("Layers: {}\nLayer Dimension: {}\nBrick Dimension: {}\nMax Brick count: {}\nBrick Dim per Layer Dim: {}\nMemory for Layers: {} ({} MB)\nMemory for Bricks: {} ({} MB)\n",
-			layer_count, layer_size, brick_size, max_brick_count, bricks_per_layer, layer_bytes, layer_bytes / (1024 * 1024), brick_bytes, brick_bytes / (1024 * 1024));
-
-		check(context.create_buffer(layer_buffer, layer_memory, layer_bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-
-		check(context.create_buffer(brick_buffer, brick_memory, brick_bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		return {};
 	}
 
 	och::status run() noexcept
 	{
-		
+
 
 		return {};
 	}
-
-	void destroy() noexcept
-	{
-		vkDestroyBuffer(context.m_device, layer_buffer, nullptr);
-
-		vkFreeMemory(context.m_device, layer_memory, nullptr);
-
-		vkDestroyBuffer(context.m_device, brick_buffer, nullptr);
-
-		vkFreeMemory(context.m_device, brick_memory, nullptr);
-
-		context.destroy();
-	}
 };
 
-och::status run_voxel_volume(int argc, const char** argv) noexcept
+och::status run_voxel_volume(int argc, const char* argv) noexcept
 {
-	voxel_volume program{};
+	argc; argv;
 
-	och::status err = program.create(argc, argv);
+	voxel_volume program;
+
+	och::status err = program.create();
 
 	if (!err)
 		err = program.run();

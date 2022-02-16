@@ -83,14 +83,14 @@
     <ClCompile Include="sdf_glyph_atlas.cpp">
       <Filter>helpers</Filter>
     </ClCompile>
-    <ClCompile Include="voxel_volume.cpp">
-      <Filter>samples\voxel_volume</Filter>
-    </ClCompile>
     <ClCompile Include="help.cpp">
       <Filter>samples\help</Filter>
     </ClCompile>
     <ClCompile Include="gpu_info.cpp">
       <Filter>samples\gpu_info</Filter>
+    </ClCompile>
+    <ClCompile Include="voxel_volume.cpp">
+      <Filter>samples\voxel_volume</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -195,20 +195,11 @@
     <None Include="shaders\tutorial.frag">
       <Filter>samples\vulkan_tutorial</Filter>
     </None>
-    <None Include="shaders\swapchain.comp.spv">
-      <Filter>samples\compute_to_swapchain</Filter>
-    </None>
     <None Include="shaders\swapchain.comp">
       <Filter>samples\compute_to_swapchain</Filter>
     </None>
-    <None Include="shaders\simplex3d.comp.spv">
+    <None Include="shaders\simplex3d_slice.comp">
       <Filter>samples\compute_to_swapchain</Filter>
-    </None>
-    <None Include="shaders\simplex3d.comp">
-      <Filter>samples\compute_to_swapchain</Filter>
-    </None>
-    <None Include="shaders\buffer_copy.comp.spv">
-      <Filter>samples\compute_buffer_copy</Filter>
     </None>
     <None Include="shaders\buffer_copy.comp">
       <Filter>samples\compute_buffer_copy</Filter>
@@ -216,16 +207,13 @@
     <None Include="shaders\sdf_font.vert">
       <Filter>samples\sdf_font</Filter>
     </None>
-    <None Include="shaders\sdf_font.vert.spv">
-      <Filter>samples\sdf_font</Filter>
-    </None>
     <None Include="shaders\sdf_font.frag">
       <Filter>samples\sdf_font</Filter>
     </None>
-    <None Include="shaders\sdf_font.frag.spv">
-      <Filter>samples\sdf_font</Filter>
-    </None>
     <None Include="shaders\voxel_volume_trace.comp">
+      <Filter>samples\voxel_volume</Filter>
+    </None>
+    <None Include="shaders\simplex3d.comp">
       <Filter>samples\voxel_volume</Filter>
     </None>
   </ItemGroup>

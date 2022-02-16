@@ -46,6 +46,8 @@ struct input_event
 	uint16_t event_id;
 };
 
+size_t find_aligned_size(size_t elem_size, size_t alignment) noexcept;
+
 
 
 struct required_feature_list
@@ -393,6 +395,9 @@ struct vulkan_context
 
 	och::status create_buffer(VkBuffer& out_buffer, VkDeviceMemory& out_memory, VkDeviceSize bytes, VkBufferUsageFlags buffer_usage, VkMemoryPropertyFlags memory_properties, VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_idx_cnt = 0, const uint32_t* queue_family_indices = nullptr) const noexcept;
 
+	och::status create_image_with_view(VkImageView& out_view, VkImage& out_image, VkDeviceMemory& out_memory, VkExtent3D extent, VkImageAspectFlags aspect, VkImageUsageFlags image_usage, VkImageType image_type, VkImageViewType view_type, VkFormat image_format, VkFormat view_format, VkMemoryPropertyFlags memory_properties, VkImageTiling image_tiling = VK_IMAGE_TILING_OPTIMAL, VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_idx_cnt = 0, const uint32_t* queue_family_indices = nullptr) noexcept;
+
+	och::status create_images_with_views(uint32_t image_cnt, VkImageView* out_views, VkImage* out_images, VkDeviceMemory& out_memory, VkExtent3D extent, VkImageAspectFlags aspect, VkImageUsageFlags image_usage, VkImageType image_type, VkImageViewType view_type, VkFormat image_format, VkFormat view_format, VkMemoryPropertyFlags memory_properties, VkImageTiling image_tiling = VK_IMAGE_TILING_OPTIMAL, VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE, uint32_t queue_family_idx_cnt = 0, const uint32_t* queue_family_indices = nullptr) noexcept;
 
 	och::status begin_message_processing() noexcept;
 

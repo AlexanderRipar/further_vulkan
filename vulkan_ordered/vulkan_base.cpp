@@ -11,6 +11,17 @@
 
 #include <vulkan/vulkan_win32.h>
 
+
+
+size_t find_aligned_size(size_t elem_size, size_t alignment) noexcept
+{
+	const size_t underalignment = elem_size % alignment;
+
+	return underalignment == 0 ? elem_size : elem_size - underalignment + alignment;
+}
+
+
+
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
 	user_data; type; severity;
@@ -964,6 +975,130 @@ och::status vulkan_context::create_buffer(VkBuffer& out_buffer, VkDeviceMemory& 
 
 	return {};
 }
+
+och::status vulkan_context::create_image_with_view(VkImageView& out_view, VkImage& out_image, VkDeviceMemory& out_memory, VkExtent3D extent, VkImageAspectFlags aspect, VkImageUsageFlags image_usage, VkImageType image_type, VkImageViewType view_type, VkFormat image_format, VkFormat view_format, VkMemoryPropertyFlags memory_properties, VkImageTiling image_tiling, VkSharingMode sharing_mode, uint32_t queue_family_idx_cnt, const uint32_t* queue_family_indices) noexcept
+{
+	VkImageCreateInfo image_ci{};
+	image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_ci.pNext = nullptr;
+	image_ci.flags = 0;
+	image_ci.imageType = image_type;
+	image_ci.format = image_format;
+	image_ci.extent = extent;
+	image_ci.mipLevels = 1;
+	image_ci.arrayLayers = 1;
+	image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+	image_ci.tiling = image_tiling;
+	image_ci.usage = image_usage;
+	image_ci.sharingMode = sharing_mode;
+	image_ci.queueFamilyIndexCount = queue_family_idx_cnt;
+	image_ci.pQueueFamilyIndices = queue_family_indices;
+	image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	check(vkCreateImage(m_device, &image_ci, nullptr, &out_image));
+
+	VkMemoryRequirements mem_reqs;
+
+	vkGetImageMemoryRequirements(m_device, out_image, &mem_reqs);
+
+	uint32_t mem_type_idx;
+
+	check(suitable_memory_type_idx(mem_type_idx, mem_reqs.memoryTypeBits, memory_properties));
+
+	VkMemoryAllocateInfo memory_ai{};
+	memory_ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memory_ai.pNext = nullptr;
+	memory_ai.allocationSize = mem_reqs.size;
+	memory_ai.memoryTypeIndex = mem_type_idx;
+
+	check(vkAllocateMemory(m_device, &memory_ai, nullptr, &out_memory));
+
+	VkImageViewCreateInfo image_view_ci{};
+	image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	image_view_ci.pNext = nullptr;
+	image_view_ci.flags = 0;
+	image_view_ci.image = out_image;
+	image_view_ci.viewType = view_type;
+	image_view_ci.format = view_format;
+	image_view_ci.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY };
+	image_view_ci.subresourceRange.aspectMask = aspect;
+	image_view_ci.subresourceRange.baseMipLevel = 0;
+	image_view_ci.subresourceRange.levelCount = 1;
+	image_view_ci.subresourceRange.baseArrayLayer = 0;
+	image_view_ci.subresourceRange.layerCount = 1;
+
+	check(vkCreateImageView(m_device, &image_view_ci, nullptr, &out_view));
+
+	return {};
+}
+
+och::status vulkan_context::create_images_with_views(uint32_t image_cnt, VkImageView* out_views, VkImage* out_images, VkDeviceMemory& out_memory, VkExtent3D extent, VkImageAspectFlags aspect, VkImageUsageFlags image_usage, VkImageType image_type, VkImageViewType view_type, VkFormat image_format, VkFormat view_format, VkMemoryPropertyFlags memory_properties, VkImageTiling image_tiling, VkSharingMode sharing_mode, uint32_t queue_family_idx_cnt, const uint32_t* queue_family_indices) noexcept
+{
+	VkImageCreateInfo image_ci{};
+	image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_ci.pNext = nullptr;
+	image_ci.flags = 0;
+	image_ci.imageType = image_type;
+	image_ci.format = image_format;
+	image_ci.extent = extent;
+	image_ci.mipLevels = 1;
+	image_ci.arrayLayers = 1;
+	image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+	image_ci.tiling = image_tiling;
+	image_ci.usage = image_usage;
+	image_ci.sharingMode = sharing_mode;
+	image_ci.queueFamilyIndexCount = queue_family_idx_cnt;
+	image_ci.pQueueFamilyIndices = queue_family_indices;
+	image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	for (uint32_t i = 0; i != image_cnt; ++i)
+		check(vkCreateImage(m_device, &image_ci, nullptr, &out_images[i]));
+
+	VkMemoryRequirements mem_reqs;
+
+	vkGetImageMemoryRequirements(m_device, out_images[0], &mem_reqs);
+
+	uint32_t mem_type_idx;
+
+	check(suitable_memory_type_idx(mem_type_idx, mem_reqs.memoryTypeBits, memory_properties));
+
+	size_t aligned_size = find_aligned_size(mem_reqs.size, mem_reqs.alignment);
+
+	VkMemoryAllocateInfo memory_ai{};
+	memory_ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memory_ai.pNext = nullptr;
+	memory_ai.allocationSize = aligned_size * (image_cnt - 1) + mem_reqs.size;
+	memory_ai.memoryTypeIndex = mem_type_idx;
+
+	check(vkAllocateMemory(m_device, &memory_ai, nullptr, &out_memory));
+
+	for (uint32_t i = 0; i != image_cnt; ++i)
+		check(vkBindImageMemory(m_device, out_images[i], out_memory, aligned_size * i));
+
+	VkImageViewCreateInfo image_view_ci{};
+	image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	image_view_ci.pNext = nullptr;
+	image_view_ci.flags = 0;
+	image_view_ci.image = nullptr;
+	image_view_ci.viewType = view_type;
+	image_view_ci.format = view_format;
+	image_view_ci.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY };
+	image_view_ci.subresourceRange.aspectMask = aspect;
+	image_view_ci.subresourceRange.baseMipLevel = 0;
+	image_view_ci.subresourceRange.levelCount = 1;
+	image_view_ci.subresourceRange.baseArrayLayer = 0;
+	image_view_ci.subresourceRange.layerCount = 1;
+
+	for (uint32_t i = 0; i != image_cnt; ++i)
+	{
+		image_view_ci.image = out_images[i];
+
+		check(vkCreateImageView(m_device, &image_view_ci, nullptr, &out_views[i]));
+	}
+
+	return {};
+}
+
 
 
 
