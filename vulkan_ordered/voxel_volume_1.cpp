@@ -56,7 +56,7 @@ struct voxel_volume
 
 
 
-	static constexpr uint32_t LEVEL_CNT = 2;
+	static constexpr uint32_t LEVEL_CNT = 3;
 
 	static constexpr uint32_t BASE_DIM_LOG2 = 6;
 
@@ -76,7 +76,7 @@ struct voxel_volume
 
 	static constexpr uint64_t BASE_BYTES_IN_TOTAL = BASE_VOL * sizeof(base_elem_t);
 
-	static constexpr float BASE_OCCUPANCY = 0.25F;
+	static constexpr float BASE_OCCUPANCY = 0.0625F;
 
 	static constexpr uint32_t BRICK_CNT_PER_LEVEL = static_cast<uint32_t>(BASE_VOL * BASE_OCCUPANCY);
 

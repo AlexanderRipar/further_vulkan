@@ -1013,6 +1013,8 @@ och::status vulkan_context::create_image_with_view(VkImageView& out_view, VkImag
 
 	check(vkAllocateMemory(m_device, &memory_ai, nullptr, &out_memory));
 
+	check(vkBindImageMemory(m_device, out_image, out_memory, 0));
+
 	VkImageViewCreateInfo image_view_ci{};
 	image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	image_view_ci.pNext = nullptr;
