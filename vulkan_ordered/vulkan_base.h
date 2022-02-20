@@ -430,6 +430,8 @@ struct vulkan_context
 
 	void unset_keycode(och::vk keycode) noexcept;
 
+	bool get_keycode(och::vk keycode) noexcept;
+
 	void reset_pressed_keys() noexcept;
 
 	void set_mouse_pos(uint16_t x, uint16_t y) noexcept;

@@ -497,7 +497,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 				if (VK_ERROR_FORMAT_NOT_SUPPORTED == vkGetPhysicalDeviceImageFormatProperties(dev, surface_formats[j].format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, swapchain_image_usage, 0, &format_props))
 					continue;
-
+				
 				if (!format_found || (surface_formats[j].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[j].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR))
 				{
 					format_found = true;
@@ -1292,6 +1292,11 @@ void vulkan_context::set_keycode(och::vk keycode) noexcept
 void vulkan_context::unset_keycode(och::vk keycode) noexcept
 {
 	m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] &= ~(1ull << (static_cast<uint8_t>(keycode) & 63));
+}
+
+bool vulkan_context::get_keycode(och::vk keycode) noexcept
+{
+	return m_pressed_keycodes[static_cast<uint8_t>(keycode) >> 6] & (1ull << (static_cast<uint8_t>(keycode) & 63));
 }
 
 void vulkan_context::reset_pressed_keys() noexcept

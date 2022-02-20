@@ -236,7 +236,16 @@
     <ClCompile Include="voxel_volume.cpp" />
     <ClCompile Include="vulkan_base.cpp" />
     <ClCompile Include="truetype.cpp" />
-    <ClCompile Include="vulkan_tutorial.cpp" />
+    <ClCompile Include="vulkan_tutorial.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\och_lib\och_lib\och_constexpr_util.h" />
@@ -265,7 +274,16 @@
     <ClInclude Include="compute_to_swapchain.h" />
     <ClInclude Include="voxel_volume.h" />
     <ClInclude Include="vulkan_base.h" />
-    <ClInclude Include="vulkan_tutorial.h" />
+    <ClInclude Include="vulkan_tutorial.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>

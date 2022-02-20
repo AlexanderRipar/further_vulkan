@@ -110,5 +110,7 @@ void main()
 
 	float rst = 38.0 * (t0 + t1 + t2 + t3) + 0.5;
 
-	imageStore(image, ivec3(gl_GlobalInvocationID.xyz), uvec4(rst * 256));
+	uint bin_rst = rst > 0.6 ? 1u : 0xFFFF;
+
+	imageStore(image, ivec3(gl_GlobalInvocationID.xyz), uvec4(bin_rst));
 }
