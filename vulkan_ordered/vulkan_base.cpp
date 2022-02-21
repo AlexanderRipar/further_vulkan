@@ -1121,8 +1121,17 @@ void vulkan_context::end_message_processing() noexcept
 
 
 
-och::status vulkan_context::set_window_title(const char* text) noexcept
+och::status vulkan_context::set_window_note(const char* note) noexcept
 {
+	char text_buf[1024];
+
+	const char* text = text_buf;
+
+	if (note != nullptr)
+		och::sprint(text_buf, "{}{}", m_app_name, note);
+	else
+		text = m_app_name;
+
 	wchar_t buf[1024];
 
 	if (!MultiByteToWideChar(CP_UTF8, 0, text, -1, buf, 1024))
@@ -1130,17 +1139,6 @@ och::status vulkan_context::set_window_title(const char* text) noexcept
 
 	if (!SetWindowTextW(static_cast<HWND>(m_hwnd), buf))
 		return to_status(HRESULT_FROM_WIN32(GetLastError()));
-
-	return {};
-}
-
-och::status vulkan_context::set_window_title_fps(uint32_t fps) noexcept
-{
-	char buf[1024];
-
-	och::sprint(buf, "FPS: {}", fps);
-
-	check(set_window_title(buf));
 
 	return {};
 }

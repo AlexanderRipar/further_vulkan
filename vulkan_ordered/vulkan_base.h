@@ -404,9 +404,7 @@ struct vulkan_context
 	void end_message_processing() noexcept;
 
 
-	och::status set_window_title(const char* text) noexcept;
-
-	och::status set_window_title_fps(uint32_t fps) noexcept;
+	och::status set_window_note(const char* note) noexcept;
 
 
 	bool is_window_closed() const noexcept;

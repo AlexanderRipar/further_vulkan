@@ -292,6 +292,7 @@
     <None Include="shaders\sdf_font.frag" />
     <None Include="shaders\sdf_font.vert" />
     <None Include="shaders\simplex3d.comp" />
+    <None Include="shaders\simplex3d_layered.comp" />
     <None Include="shaders\simplex3d_slice.comp" />
     <None Include="shaders\swapchain.comp" />
     <None Include="shaders\tutorial.frag" />

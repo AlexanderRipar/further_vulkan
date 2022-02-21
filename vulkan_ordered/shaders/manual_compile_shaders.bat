@@ -7,5 +7,6 @@ glslc.exe   sdf_font.frag             -O   -o sdf_font.frag.spv
 glslc.exe   sdf_font.vert             -O   -o sdf_font.vert.spv
 glslc.exe   simplex3d.comp            -O   -o simplex3d.comp.spv
 glslc.exe   voxel_volume_trace.comp   -O   -o voxel_volume_trace.comp.spv
+glslc.exe   simplex3d_layered.comp    -O   -o simplex3d_layered.comp.spv
 
 pause

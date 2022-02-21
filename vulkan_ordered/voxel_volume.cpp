@@ -62,7 +62,7 @@ struct voxel_volume
 
 	och::vec3 input_rotation{ 0.0F, 0.0F, 0.0F };
 
-	och::vec3 input_position{ 28.0F, 28.0F, 28.0F };
+	och::vec3 input_position{ 0.0F, 0.0F, 0.0F }; // { 28.0F, 28.0F, 28.0F };
 
 
 
@@ -138,7 +138,245 @@ struct voxel_volume
 
 
 
-	och::status temp_populate() noexcept
+	och::status temp_populate_multi_layer() noexcept
+	{
+		static constexpr uint32_t POPULATE_GROUP_SIZE_X = 8;
+
+		static constexpr uint32_t POPULATE_GROUP_SIZE_Y = 8;
+
+		static constexpr uint32_t POPULATE_GROUP_SIZE_Z = 8;
+
+		VkDescriptorPool pop_descriptor_pool;
+
+		VkDescriptorSetLayout pop_descriptor_set_layout;
+
+		VkDescriptorSet pop_descriptor_set;
+
+		VkCommandPool pop_command_pool;
+
+		VkCommandBuffer pop_command_buffer;
+
+		VkPipelineLayout pop_pipeline_layout;
+
+		VkShaderModule pop_shader_module;
+
+		VkPipeline pop_pipeline;
+
+		// Create Pipeline
+		{
+			VkDescriptorSetLayoutBinding binding{};
+			binding.binding = 0;
+			binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			binding.descriptorCount = 1;
+			binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			binding.pImmutableSamplers = nullptr;
+
+			VkDescriptorSetLayoutCreateInfo descriptor_set_layout_ci{};
+			descriptor_set_layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			descriptor_set_layout_ci.pNext = nullptr;
+			descriptor_set_layout_ci.flags = 0;
+			descriptor_set_layout_ci.bindingCount = 1;
+			descriptor_set_layout_ci.pBindings = &binding;
+
+			check(vkCreateDescriptorSetLayout(ctx.m_device, &descriptor_set_layout_ci, nullptr, &pop_descriptor_set_layout));
+
+			VkPushConstantRange push_constant_range{};
+			push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			push_constant_range.offset = 0;
+			push_constant_range.size = sizeof(och::vec4);
+
+			VkPipelineLayoutCreateInfo pipeline_layout_ci{};
+			pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			pipeline_layout_ci.pNext = nullptr;
+			pipeline_layout_ci.flags = 0;
+			pipeline_layout_ci.setLayoutCount = 1;
+			pipeline_layout_ci.pSetLayouts = &pop_descriptor_set_layout;
+			pipeline_layout_ci.pushConstantRangeCount = 1;
+			pipeline_layout_ci.pPushConstantRanges = &push_constant_range;
+
+			check(vkCreatePipelineLayout(ctx.m_device, &pipeline_layout_ci, nullptr, &pop_pipeline_layout));
+
+			check(ctx.load_shader_module_file(pop_shader_module, OCH_DIR "shaders\\simplex3d_layered.comp.spv"));
+
+			struct
+			{
+				uint32_t group_size_x = POPULATE_GROUP_SIZE_X;
+				uint32_t group_size_y = POPULATE_GROUP_SIZE_Y;
+				uint32_t group_size_z = POPULATE_GROUP_SIZE_Z;
+				uint32_t base_dim_log2 = 6;
+			} constant_data;
+
+			VkSpecializationMapEntry specialization_map_entries[4]{
+				{ 1, offsetof(decltype(constant_data), group_size_x), sizeof(constant_data.group_size_x) },
+				{ 2, offsetof(decltype(constant_data), group_size_y), sizeof(constant_data.group_size_y) },
+				{ 3, offsetof(decltype(constant_data), group_size_z), sizeof(constant_data.group_size_z) },
+				{ 4, offsetof(decltype(constant_data), base_dim_log2), sizeof(constant_data.base_dim_log2) },
+			};
+
+			VkSpecializationInfo specialization_info{};
+			specialization_info.mapEntryCount = 4;
+			specialization_info.pMapEntries = specialization_map_entries;
+			specialization_info.dataSize = sizeof(constant_data);
+			specialization_info.pData = &constant_data;
+
+			VkPipelineShaderStageCreateInfo shader_stage_ci{};
+			shader_stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			shader_stage_ci.pNext = nullptr;
+			shader_stage_ci.flags = 0;
+			shader_stage_ci.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+			shader_stage_ci.module = pop_shader_module;
+			shader_stage_ci.pName = "main";
+			shader_stage_ci.pSpecializationInfo = &specialization_info;
+
+			VkComputePipelineCreateInfo pipeline_ci{};
+			pipeline_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+			pipeline_ci.pNext = nullptr;
+			pipeline_ci.flags = 0;
+			pipeline_ci.stage = shader_stage_ci;
+			pipeline_ci.layout = pop_pipeline_layout;
+			pipeline_ci.basePipelineHandle = nullptr;
+			pipeline_ci.basePipelineIndex = -1;
+
+			check(vkCreateComputePipelines(ctx.m_device, nullptr, 1, &pipeline_ci, nullptr, &pop_pipeline));
+		}
+
+		// Create Descriptor Sets
+		{
+			VkDescriptorPoolSize pool_size;
+			pool_size.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			pool_size.descriptorCount = 1;
+
+			VkDescriptorPoolCreateInfo descriptor_pool_ci{};
+			descriptor_pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			descriptor_pool_ci.pNext = nullptr;
+			descriptor_pool_ci.flags = 0;
+			descriptor_pool_ci.maxSets = 1;
+			descriptor_pool_ci.poolSizeCount = 1;
+			descriptor_pool_ci.pPoolSizes = &pool_size;
+
+			check(vkCreateDescriptorPool(ctx.m_device, &descriptor_pool_ci, nullptr, &pop_descriptor_pool));
+
+			VkDescriptorSetAllocateInfo descriptor_set_ai{};
+			descriptor_set_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			descriptor_set_ai.pNext = nullptr;
+			descriptor_set_ai.descriptorPool = pop_descriptor_pool;
+			descriptor_set_ai.descriptorSetCount = 1;
+			descriptor_set_ai.pSetLayouts = &pop_descriptor_set_layout;
+
+			check(vkAllocateDescriptorSets(ctx.m_device, &descriptor_set_ai, &pop_descriptor_set));
+
+			VkDescriptorImageInfo descriptor_image_info{};
+			descriptor_image_info.sampler = nullptr;
+			descriptor_image_info.imageView = base_image_view;
+			descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			VkWriteDescriptorSet write_descriptor_set{};
+			write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_set.pNext = nullptr;
+			write_descriptor_set.dstSet = pop_descriptor_set;
+			write_descriptor_set.dstBinding = 0;
+			write_descriptor_set.dstArrayElement = 0;
+			write_descriptor_set.descriptorCount = 1;
+			write_descriptor_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			write_descriptor_set.pImageInfo = &descriptor_image_info;
+			write_descriptor_set.pBufferInfo = nullptr;
+			write_descriptor_set.pTexelBufferView = nullptr;
+
+			vkUpdateDescriptorSets(ctx.m_device, 1, &write_descriptor_set, 0, nullptr);
+		}
+
+		// Create Command Buffer
+		{
+			VkCommandPoolCreateInfo command_pool_ci{};
+			command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			command_pool_ci.pNext = nullptr;
+			command_pool_ci.flags = 0;
+			command_pool_ci.queueFamilyIndex = ctx.m_general_queues.family_index;
+
+			check(vkCreateCommandPool(ctx.m_device, &command_pool_ci, nullptr, &pop_command_pool));
+
+			VkCommandBufferAllocateInfo command_buffer_ai{};
+			command_buffer_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			command_buffer_ai.pNext = nullptr;
+			command_buffer_ai.commandPool = pop_command_pool;
+			command_buffer_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			command_buffer_ai.commandBufferCount = 1;
+
+			check(vkAllocateCommandBuffers(ctx.m_device, &command_buffer_ai, &pop_command_buffer));
+		}
+
+		// Submit Command Buffer
+		{
+			VkCommandBufferBeginInfo command_buffer_bi{};
+			command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			command_buffer_bi.pNext = nullptr;
+			command_buffer_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			command_buffer_bi.pInheritanceInfo = nullptr;
+
+			check(vkBeginCommandBuffer(pop_command_buffer, &command_buffer_bi));
+
+			VkImageMemoryBarrier to_storage_barrier;
+			to_storage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			to_storage_barrier.pNext = nullptr;
+			to_storage_barrier.srcAccessMask = VK_ACCESS_NONE_KHR;
+			to_storage_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			to_storage_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			to_storage_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			to_storage_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			to_storage_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			to_storage_barrier.image = base_image;
+			to_storage_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			to_storage_barrier.subresourceRange.baseMipLevel = 0;
+			to_storage_barrier.subresourceRange.levelCount = 1;
+			to_storage_barrier.subresourceRange.baseArrayLayer = 0;
+			to_storage_barrier.subresourceRange.layerCount = 1;
+
+			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_storage_barrier);
+
+			och::vec4 push_constant_data{ 0.0F, 0.0F, 0.0F, 0.1F };
+
+			vkCmdPushConstants(pop_command_buffer, pop_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data), &push_constant_data);
+
+			vkCmdBindDescriptorSets(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline_layout, 0, 1, &pop_descriptor_set, 0, nullptr);
+
+			vkCmdBindPipeline(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline);
+
+			vkCmdDispatch(pop_command_buffer, (BASE_DIM * LEVEL_CNT) / POPULATE_GROUP_SIZE_X, BASE_DIM / POPULATE_GROUP_SIZE_Y, BASE_DIM / POPULATE_GROUP_SIZE_Z);
+
+			check(vkEndCommandBuffer(pop_command_buffer));
+
+			VkSubmitInfo submit_info{};
+			submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submit_info.pNext = nullptr;
+			submit_info.waitSemaphoreCount = 0;
+			submit_info.pWaitSemaphores = nullptr;
+			submit_info.pWaitDstStageMask = nullptr;
+			submit_info.commandBufferCount = 1;
+			submit_info.pCommandBuffers = &pop_command_buffer;
+			submit_info.signalSemaphoreCount = 0;
+			submit_info.pSignalSemaphores = nullptr;
+
+			check(vkQueueSubmit(ctx.m_general_queues[0], 1, &submit_info, nullptr));
+		}
+
+		check(vkQueueWaitIdle(ctx.m_general_queues[0]));
+
+		vkDestroyCommandPool(ctx.m_device, pop_command_pool, nullptr);
+
+		vkDestroyDescriptorPool(ctx.m_device, pop_descriptor_pool, nullptr);
+
+		vkDestroyPipeline(ctx.m_device, pop_pipeline, nullptr);
+
+		vkDestroyShaderModule(ctx.m_device, pop_shader_module, nullptr);
+
+		vkDestroyPipelineLayout(ctx.m_device, pop_pipeline_layout, nullptr);
+
+		vkDestroyDescriptorSetLayout(ctx.m_device, pop_descriptor_set_layout, nullptr);
+
+		return {};
+	}
+
+	och::status temp_populate_single_layer() noexcept
 	{
 		static constexpr uint32_t POPULATE_GROUP_SIZE_X = 8;
 
@@ -398,7 +636,7 @@ struct voxel_volume
 		copy_region.imageSubresource.mipLevel = 0;
 		copy_region.imageSubresource.baseArrayLayer = 0;
 		copy_region.imageSubresource.layerCount = 1;
-		copy_region.imageOffset = { 0, 0, 0 };
+		copy_region.imageOffset = { BASE_DIM / 2, 0, 0 };
 		copy_region.imageExtent = { BASE_DIM, BASE_DIM, 1 };
 
 		vkCmdCopyImageToBuffer(cb_command_buffer, base_image, VK_IMAGE_LAYOUT_GENERAL, cb_buffer, 1, &copy_region);
@@ -851,7 +1089,7 @@ struct voxel_volume
 			}
 		}
 
-		check(temp_populate());
+		check(temp_populate_single_layer());
 
 		check(temp_copyback());
 
@@ -957,7 +1195,7 @@ struct voxel_volume
 
 		vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_general_barrier);
 
-		och::mat3 rotation = och::mat3::rotate_x(input_rotation.x) * och::mat3::rotate_y(input_rotation.y) * och::mat3::rotate_z(input_rotation.z);
+		och::mat3 rotation = och::mat3::rotate_y(input_rotation.y) * och::mat3::rotate_x(input_rotation.x);
 
 		push_constant_data_t push_data;
 		push_data.origin = { input_position.x, input_position.y, input_position.z, 0.0F };
@@ -966,7 +1204,7 @@ struct voxel_volume
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
 
-		static constexpr float rot_delta = 0.001F, pos_delta = 0.025F;
+		static constexpr float rot_delta = 1.0F / 256.0F, pos_delta = 1.0F/16.0F;
 
 		if (ctx.get_keycode(och::vk::arrow_up))
 			input_rotation.x -= rot_delta;
@@ -1115,7 +1353,11 @@ struct voxel_volume
 
 				if (elapsed_ms > 1000)
 				{
-					check(ctx.set_window_title_fps((frames_since_last_report * 1000) / (elapsed_ms + 1)));
+					char fps_buf[1024];
+
+					och::sprint(fps_buf, "    (FPS: {})", (frames_since_last_report * 1000) / (elapsed_ms + 1));
+
+					check(ctx.set_window_note(fps_buf));
 
 					frames_since_last_report = 0;
 
