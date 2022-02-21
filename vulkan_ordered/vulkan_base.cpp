@@ -79,6 +79,7 @@ int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64
 	case WM_MOUSEMOVE:
 		ctx->set_mouse_pos(LOWORD(lparam), HIWORD(lparam));
 
+		/*
 		{
 			wchar_t buf[64]{};
 
@@ -133,6 +134,7 @@ int64_t vulkan_context_window_fn(HWND hwnd, uint32_t msg, uint64_t wparam, int64
 
 			SetWindowTextW(static_cast<HWND>(ctx->m_hwnd), buf + idx + 1);
 		}
+		*/
 
 		return 0;
 
@@ -1116,6 +1118,34 @@ void vulkan_context::end_message_processing() noexcept
 {
 	PostMessageW(static_cast<HWND>(m_hwnd), MESSAGE_PUMP_THREAD_TERMINATION_MESSAGE, 0, 0);
 }
+
+
+
+och::status vulkan_context::set_window_title(const char* text) noexcept
+{
+	wchar_t buf[1024];
+
+	if (!MultiByteToWideChar(CP_UTF8, 0, text, -1, buf, 1024))
+		return to_status(HRESULT_FROM_WIN32(GetLastError()));
+
+	if (!SetWindowTextW(static_cast<HWND>(m_hwnd), buf))
+		return to_status(HRESULT_FROM_WIN32(GetLastError()));
+
+	return {};
+}
+
+och::status vulkan_context::set_window_title_fps(uint32_t fps) noexcept
+{
+	char buf[1024];
+
+	och::sprint(buf, "FPS: {}", fps);
+
+	check(set_window_title(buf));
+
+	return {};
+}
+
+
 
 bool vulkan_context::is_window_closed() const noexcept
 {
