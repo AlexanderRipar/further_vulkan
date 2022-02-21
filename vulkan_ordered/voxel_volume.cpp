@@ -65,6 +65,13 @@ struct voxel_volume
 	och::vec3 input_position{ 28.0F, 28.0F, 28.0F };
 
 
+
+	och::time last_report_time{};
+
+	uint64_t frames_since_last_report{};
+
+
+
 	vulkan_context ctx;
 
 
@@ -1030,6 +1037,8 @@ struct voxel_volume
 	{
 		check(ctx.begin_message_processing());
 
+		last_report_time = och::time::now();
+
 		while (!ctx.is_window_closed())
 		{
 			check(vkWaitForFences(ctx.m_device, 1, &frame_inflight_fences[frame_idx], VK_FALSE, UINT64_MAX));
@@ -1093,6 +1102,26 @@ struct voxel_volume
 				check(present_rst);
 
 			frame_idx = (frame_idx + 1) % MAX_FRAMES_INFLIGHT;
+
+			// FPS counter
+			{
+				++frames_since_last_report;
+
+				och::time now = och::time::now();
+
+				och::timespan elapsed_time = (now - last_report_time);
+
+				uint64_t elapsed_ms = elapsed_time.milliseconds();
+
+				if (elapsed_ms > 1000)
+				{
+					check(ctx.set_window_title_fps((frames_since_last_report * 1000) / (elapsed_ms + 1)));
+
+					frames_since_last_report = 0;
+
+					last_report_time = now;
+				}
+			}
 		}
 
 		return {};
