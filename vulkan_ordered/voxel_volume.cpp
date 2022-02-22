@@ -62,13 +62,7 @@ struct voxel_volume
 
 	och::vec3 input_rotation{ 0.0F, 0.0F, 0.0F };
 
-	och::vec3 input_position{ 0.0F, 0.0F, 0.0F }; // { 28.0F, 28.0F, 28.0F };
-
-
-
-	och::time last_report_time{};
-
-	uint64_t frames_since_last_report{};
+	och::vec3 input_position{ 32.0F, 32.0F, 32.0F }; // { 28.0F, 28.0F, 28.0F };
 
 
 
@@ -626,38 +620,54 @@ struct voxel_volume
 
 		VkCommandBuffer cb_command_buffer;
 
-		check(ctx.begin_onetime_command(cb_command_buffer, cb_command_pool));
+		int32_t pos_array[]{
+			0,
+			BASE_DIM - 1,
+			BASE_DIM,
+			2 * BASE_DIM - 1,
+			2 * BASE_DIM,
+			3 * BASE_DIM - 1,
+		};
 
-		VkBufferImageCopy copy_region;
-		copy_region.bufferOffset = 0;
-		copy_region.bufferRowLength = 0;
-		copy_region.bufferImageHeight = 0;
-		copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		copy_region.imageSubresource.mipLevel = 0;
-		copy_region.imageSubresource.baseArrayLayer = 0;
-		copy_region.imageSubresource.layerCount = 1;
-		copy_region.imageOffset = { BASE_DIM / 2, 0, 0 };
-		copy_region.imageExtent = { BASE_DIM, BASE_DIM, 1 };
+		for (int32_t pos : pos_array)
+		{
+			check(ctx.begin_onetime_command(cb_command_buffer, cb_command_pool));
 
-		vkCmdCopyImageToBuffer(cb_command_buffer, base_image, VK_IMAGE_LAYOUT_GENERAL, cb_buffer, 1, &copy_region);
+			VkBufferImageCopy copy_region;
+			copy_region.bufferOffset = 0;
+			copy_region.bufferRowLength = 0;
+			copy_region.bufferImageHeight = 0;
+			copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			copy_region.imageSubresource.mipLevel = 0;
+			copy_region.imageSubresource.baseArrayLayer = 0;
+			copy_region.imageSubresource.layerCount = 1;
+			copy_region.imageOffset = { pos, 0, 0 };
+			copy_region.imageExtent = { 1, BASE_DIM, BASE_DIM };
 
-		check(ctx.submit_onetime_command(cb_command_buffer, cb_command_pool, ctx.m_general_queues.queues[0]));
+			vkCmdCopyImageToBuffer(cb_command_buffer, base_image, VK_IMAGE_LAYOUT_GENERAL, cb_buffer, 1, &copy_region);
 
-		uint16_t* cb_ptr;
+			check(ctx.submit_onetime_command(cb_command_buffer, cb_command_pool, ctx.m_general_queues.queues[0]));
 
-		check(vkMapMemory(ctx.m_device, cb_memory, 0, BASE_DIM * BASE_DIM * 2, 0, reinterpret_cast<void**>(&cb_ptr)));
+			uint16_t* cb_ptr;
 
-		bitmap_file bmp;
+			check(vkMapMemory(ctx.m_device, cb_memory, 0, BASE_DIM * BASE_DIM * 2, 0, reinterpret_cast<void**>(&cb_ptr)));
 
-		check(bmp.create("base_slice.bmp", och::fio::open::truncate, BASE_DIM, BASE_DIM));
+			bitmap_file bmp;
 
-		for (uint32_t y = 0; y != BASE_DIM; ++y)
-			for (uint32_t x = 0; x != BASE_DIM; ++x)
-				bmp(x, y) = texel_b8g8r8(static_cast<uint8_t>(cb_ptr[x + y * BASE_DIM]));
+			char bmp_name[1024];
 
-		bmp.destroy();
+			och::sprint(bmp_name, "base_slice_z{}.bmp", pos);
 
-		vkUnmapMemory(ctx.m_device, cb_memory);
+			check(bmp.create(bmp_name, och::fio::open::truncate, BASE_DIM, BASE_DIM));
+
+			for (uint32_t y = 0; y != BASE_DIM; ++y)
+				for (uint32_t x = 0; x != BASE_DIM; ++x)
+					bmp(x, y) = texel_b8g8r8(static_cast<uint8_t>(cb_ptr[x + y * BASE_DIM]));
+
+			bmp.destroy();
+
+			vkUnmapMemory(ctx.m_device, cb_memory);
+		}
 
 		vkDestroyBuffer(ctx.m_device, cb_buffer, nullptr);
 
@@ -1089,9 +1099,9 @@ struct voxel_volume
 			}
 		}
 
-		check(temp_populate_single_layer());
+		check(temp_populate_multi_layer());
 
-		check(temp_copyback());
+		// check(temp_copyback());
 
 		return {};
 	}
@@ -1162,11 +1172,6 @@ struct voxel_volume
 		ctx.destroy();
 	}
 
-	och::status destroy_swapchain() noexcept
-	{
-
-	}
-
 	och::status record_command_buffer(VkCommandBuffer command_buffer, uint32_t swapchain_idx) noexcept
 	{
 		VkCommandBufferBeginInfo command_buffer_bi{};
@@ -1199,7 +1204,7 @@ struct voxel_volume
 
 		push_constant_data_t push_data;
 		push_data.origin = { input_position.x, input_position.y, input_position.z, 0.0F };
-		push_data.direction_delta = { 0.01F, 0.01F, 0.0F, 0.0F };
+		push_data.direction_delta = { 0.003F, 0.003F, 0.0F, 0.0F };
 		push_data.direction_rotation[0] = { rotation(0, 0), rotation(1, 0), rotation(2, 0), 0.0F };
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
@@ -1275,7 +1280,9 @@ struct voxel_volume
 	{
 		check(ctx.begin_message_processing());
 
-		last_report_time = och::time::now();
+		och::time last_report_time = och::time::now();
+
+		uint64_t frames_since_last_report = 0;
 
 		while (!ctx.is_window_closed())
 		{

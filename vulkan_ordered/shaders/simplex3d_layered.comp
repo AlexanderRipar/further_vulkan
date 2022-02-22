@@ -59,7 +59,7 @@ void main()
 		return;
 
 	float scale = float(1 << (int(gl_GlobalInvocationID.x) >> BASE_DIM_LOG2));
-
+	
 	vec3 invocation_pos = vec3(gl_GlobalInvocationID & uvec3((1u << BASE_DIM_LOG2) - 1)) - scale * 0.5;
 
 	vec3 pos = invocation_pos * push_data.offset_xyz_scale_w.w * scale + push_data.offset_xyz_scale_w.xyz;
