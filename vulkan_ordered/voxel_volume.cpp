@@ -62,7 +62,7 @@ struct voxel_volume
 
 	och::vec3 input_rotation{ 0.0F, 0.0F, 0.0F };
 
-	och::vec3 input_position{ 32.0F, 32.0F, 32.0F }; // { 28.0F, 28.0F, 28.0F };
+	och::vec3 input_position{ .0F, .0F, .0F }; // { 28.0F, 28.0F, 28.0F };
 
 
 
@@ -1209,7 +1209,7 @@ struct voxel_volume
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
 
-		static constexpr float rot_delta = 1.0F / 256.0F, pos_delta = 1.0F/16.0F;
+		static constexpr float rot_delta = 1.0F / 256.0F, pos_delta = 1.0F/128.0F;
 
 		if (ctx.get_keycode(och::vk::arrow_up))
 			input_rotation.x -= rot_delta;
