@@ -12,7 +12,8 @@ layout(binding = 0, r16ui) uniform writeonly uimage3D image;
 
 layout(push_constant) uniform Push_data
 {
-	vec4 offset_xyz_scale_w;
+	vec3 offset;
+	float scale;
 } push_data;
 
 
@@ -58,12 +59,12 @@ void main()
 	if (image_sz.x <= gl_GlobalInvocationID.x || image_sz.y <= gl_GlobalInvocationID.y || image_sz.z <= gl_GlobalInvocationID.z)
 		return;
 
-	float scale = float(1 << (int(gl_GlobalInvocationID.x) >> BASE_DIM_LOG2));
+	float level_scale = float(1 << (gl_GlobalInvocationID.x >> BASE_DIM_LOG2));
 	
-	vec3 invocation_pos = vec3(gl_GlobalInvocationID & uvec3((1u << BASE_DIM_LOG2) - 1)) - scale * 0.5;
+	vec3 invocation_pos = vec3(gl_GlobalInvocationID.x & ((1u << BASE_DIM_LOG2) - 1), gl_GlobalInvocationID.yz) - float(1 << (BASE_DIM_LOG2 - 1));
 
-	vec3 pos = invocation_pos * push_data.offset_xyz_scale_w.w * scale + push_data.offset_xyz_scale_w.xyz;
-
+	vec3 pos = invocation_pos * push_data.scale * level_scale + push_data.offset;
+	
 	const float skew_factor = 1.0 / 3.0;
 	const float unskew_factor = 1.0 / 6.0;
 

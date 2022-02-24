@@ -132,6 +132,13 @@ struct voxel_volume
 
 
 
+	och::status temp_populate_bricks() noexcept
+	{
+
+
+		return {};
+	}
+
 	och::status temp_populate_multi_layer() noexcept
 	{
 		static constexpr uint32_t POPULATE_GROUP_SIZE_X = 8;
@@ -197,7 +204,7 @@ struct voxel_volume
 				uint32_t group_size_x = POPULATE_GROUP_SIZE_X;
 				uint32_t group_size_y = POPULATE_GROUP_SIZE_Y;
 				uint32_t group_size_z = POPULATE_GROUP_SIZE_Z;
-				uint32_t base_dim_log2 = 6;
+				uint32_t base_dim_log2 = BASE_DIM_LOG2;
 			} constant_data;
 
 			VkSpecializationMapEntry specialization_map_entries[4]{
@@ -327,7 +334,7 @@ struct voxel_volume
 
 			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_storage_barrier);
 
-			och::vec4 push_constant_data{ 0.0F, 0.0F, 0.0F, 0.1F };
+			och::vec4 push_constant_data{ 0.0F, 0.0F, 0.0F, 0.01F };
 
 			vkCmdPushConstants(pop_command_buffer, pop_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data), &push_constant_data);
 
@@ -766,6 +773,8 @@ struct voxel_volume
 		return {};
 	}
 
+
+
 	och::status recreate_swapchain() noexcept
 	{
 		och::print("Recreating swapchain\n");
@@ -1187,9 +1196,9 @@ struct voxel_volume
 			}
 		}
 
-		//check(temp_populate_multi_layer());
+		check(temp_populate_multi_layer());
 
-		check(temp_populate_boxcomp());
+		// check(temp_populate_boxcomp());
 
 		// check(temp_copyback());
 
@@ -1294,7 +1303,7 @@ struct voxel_volume
 
 		push_constant_data_t push_data;
 		push_data.origin = { input_position.x, input_position.y, input_position.z, 0.0F };
-		push_data.direction_delta = { 0.003F, 0.003F, 0.0F, 0.0F };
+		push_data.direction_delta = { 0.001F, 0.001F, 0.0F, 0.0F };
 		push_data.direction_rotation[0] = { rotation(0, 0), rotation(1, 0), rotation(2, 0), 0.0F };
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
