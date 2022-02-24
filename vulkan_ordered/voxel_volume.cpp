@@ -62,7 +62,7 @@ struct voxel_volume
 
 	och::vec3 input_rotation{ 0.0F, 0.0F, 0.0F };
 
-	och::vec3 input_position{ .0F, .0F, .0F }; // { 28.0F, 28.0F, 28.0F };
+	och::vec3 input_position{ 0.0F, 0.0F, 0.0F };
 
 
 
@@ -600,6 +600,94 @@ struct voxel_volume
 		return {};
 	}
 
+	och::status temp_populate_boxcomp() noexcept
+	{
+		VkBuffer box_buffer;
+
+		VkDeviceMemory box_memory;
+
+		VkCommandPool box_command_pool;
+
+		VkCommandBuffer box_command_buffer;
+
+		check(ctx.create_buffer(box_buffer, box_memory, BASE_DIM * BASE_DIM * BASE_DIM * LEVEL_CNT * 2, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+
+		uint16_t* data;
+
+		check(vkMapMemory(ctx.m_device, box_memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&data)));
+
+		memset(data, 0xFF, BASE_DIM * BASE_DIM * BASE_DIM * LEVEL_CNT * 2);
+
+		struct
+		{
+			uint32_t x, y, z;
+		} filled[]{
+			{0, 0, 0},
+			{0, 0, 1},
+			{0, 1, 0},
+			{0, 1, 0},
+			{1, 1, 0},
+			{1, 0, 0},
+			{BASE_DIM + BASE_DIM / 4 - 1, BASE_DIM / 4, BASE_DIM / 4},
+		};
+
+		for (auto& pos : filled)
+			data[pos.x + pos.y * BASE_DIM * LEVEL_CNT + pos.z * BASE_DIM * BASE_DIM * LEVEL_CNT] = 1;
+
+		vkUnmapMemory(ctx.m_device, box_memory);
+
+		VkCommandPoolCreateInfo command_pool_ci{};
+		command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		command_pool_ci.pNext = nullptr;
+		command_pool_ci.flags = 0;
+		command_pool_ci.queueFamilyIndex = ctx.m_general_queues.family_index;
+
+		check(vkCreateCommandPool(ctx.m_device, &command_pool_ci, nullptr, &box_command_pool));
+
+		check(ctx.begin_onetime_command(box_command_buffer, box_command_pool));
+
+		VkImageMemoryBarrier to_storage_barrier;
+		to_storage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		to_storage_barrier.pNext = nullptr;
+		to_storage_barrier.srcAccessMask = VK_ACCESS_NONE_KHR;
+		to_storage_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+		to_storage_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		to_storage_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		to_storage_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		to_storage_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		to_storage_barrier.image = base_image;
+		to_storage_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		to_storage_barrier.subresourceRange.baseMipLevel = 0;
+		to_storage_barrier.subresourceRange.levelCount = 1;
+		to_storage_barrier.subresourceRange.baseArrayLayer = 0;
+		to_storage_barrier.subresourceRange.layerCount = 1;
+
+		vkCmdPipelineBarrier(box_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_storage_barrier);
+
+		VkBufferImageCopy copy_region{};
+		copy_region.bufferOffset = 0;
+		copy_region.bufferRowLength = 0;
+		copy_region.bufferImageHeight = 0;
+		copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copy_region.imageSubresource.mipLevel = 0;
+		copy_region.imageSubresource.baseArrayLayer = 0;
+		copy_region.imageSubresource.layerCount = 1;
+		copy_region.imageOffset = { 0, 0, 0 };
+		copy_region.imageExtent = { BASE_DIM * LEVEL_CNT, BASE_DIM, BASE_DIM };
+
+		vkCmdCopyBufferToImage(box_command_buffer, box_buffer, base_image, VK_IMAGE_LAYOUT_GENERAL, 1, &copy_region);
+
+		check(ctx.submit_onetime_command(box_command_buffer, box_command_pool, ctx.m_general_queues[0]));
+
+		vkDestroyBuffer(ctx.m_device, box_buffer, nullptr);
+
+		vkFreeMemory(ctx.m_device, box_memory, nullptr);
+
+		vkDestroyCommandPool(ctx.m_device, box_command_pool, nullptr);
+
+		return {};
+	}
+
 	och::status temp_copyback() noexcept
 	{
 		VkBuffer cb_buffer;
@@ -1099,7 +1187,9 @@ struct voxel_volume
 			}
 		}
 
-		check(temp_populate_multi_layer());
+		//check(temp_populate_multi_layer());
+
+		check(temp_populate_boxcomp());
 
 		// check(temp_copyback());
 
@@ -1209,7 +1299,7 @@ struct voxel_volume
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
 
-		static constexpr float rot_delta = 1.0F / 256.0F, pos_delta = 1.0F/128.0F;
+		static constexpr float rot_delta = 1.0F / 128.0F, pos_delta = 1.0F/32.0F;
 
 		if (ctx.get_keycode(och::vk::arrow_up))
 			input_rotation.x -= rot_delta;
@@ -1362,7 +1452,7 @@ struct voxel_volume
 				{
 					char fps_buf[1024];
 
-					och::sprint(fps_buf, "    (FPS: {})", (frames_since_last_report * 1000) / (elapsed_ms + 1));
+					och::sprint(fps_buf, "    (FPS: {}  x: {:.2}  y: {:.2}  z: {:.2})", (frames_since_last_report * 1000) / (elapsed_ms + 1), input_position.x, input_position.y, input_position.z);
 
 					check(ctx.set_window_note(fps_buf));
 

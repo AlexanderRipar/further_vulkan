@@ -35,8 +35,6 @@ layout(push_constant) uniform Push_data {
 
 
 
-
-
 vec3 calculate_direction(in vec2 invocation, in vec2 render_extent)
 {
 	vec2 invocation_centered = vec2(invocation) - render_extent * 0.5 + 0.5;
@@ -47,6 +45,8 @@ vec3 calculate_direction(in vec2 invocation, in vec2 render_extent)
 
 	return normalized_direction * push_data.direction_rotation;
 }
+
+
 
 void main()
 {
@@ -62,16 +62,16 @@ void main()
 
 
 	// Get ray parameters
-
+	
+	vec3 ray_index = floor(push_data.origin);
+	
 	vec3 ray_coefficient = 1.0 / calculate_direction(invocation, render_extent);
 	
 	vec3 ray_offset = (vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) - push_data.origin) * ray_coefficient;
+	
 
 
-
-	vec3 base_idx = push_data.origin;
-
-	vec3 base_offset = vec3(1 << (BASE_DIM_LOG2 - 1));
+	vec3 base_offset = vec3(float(1 << (BASE_DIM_LOG2 - 1)));
 
 
 
@@ -83,11 +83,11 @@ void main()
 
 	// Start a-looping
 
-	while (base_offset.x < (1 << (BASE_DIM_LOG2)) * LEVEL_CNT)
+	while (base_offset.x < float((1 << (BASE_DIM_LOG2)) * LEVEL_CNT))
 	{
-		while (max(max(base_idx.x, base_idx.y), base_idx.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(base_idx.x, base_idx.y), base_idx.z) >= float(-1 << (BASE_DIM_LOG2 - 1)))
+		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= float(-1 << (BASE_DIM_LOG2 - 1)))
 		{
-			uint base_value = imageLoad(base_data, ivec3(base_idx + base_offset)).x;
+			uint base_value = imageLoad(base_data, ivec3(ray_index + base_offset)).x;
 
 			if (base_value != 0xFFFF)
 			{
@@ -111,23 +111,23 @@ void main()
 				return;
 			}
 			
-			ray_time = ray_coefficient * base_idx + ray_offset;
+			ray_time = ray_coefficient * ray_index + ray_offset;
 
 			min_time = min(min(ray_time.x, ray_time.y), ray_time.z);
 
 			if (min_time == ray_time.x)
-				base_idx.x += ray_coefficient.x < 0.0 ? -1.0 : 1.0;
+				ray_index.x += ray_coefficient.x < 0.0 ? -1.0 : 1.0;
 			else if (min_time == ray_time.y)
-				base_idx.y += ray_coefficient.y < 0.0 ? -1.0 : 1.0;
+				ray_index.y += ray_coefficient.y < 0.0 ? -1.0 : 1.0;
 			else
-				base_idx.z += ray_coefficient.z < 0.0 ? -1.0 : 1.0;
+				ray_index.z += ray_coefficient.z < 0.0 ? -1.0 : 1.0;
 		}
 
-		base_idx = trunc(base_idx * 0.5);
+		ray_index = floor(ray_index * 0.5);
 
 		base_offset.x += float(1 << BASE_DIM_LOG2);
 
-		ray_offset = (ray_offset + vec3(greaterThanEqual(ray_coefficient, vec3(0.0)))) * 0.5;
+		ray_offset = (ray_offset + vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) * ray_coefficient) * 0.5;
 	}
 
 	imageStore(hit_ids, invocation, vec4(0.0, 0.1, 0.2, 1.0));
