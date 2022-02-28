@@ -5,6 +5,8 @@
 #include <atomic>
 
 #include "och_err.h"
+#include "och_fio.h"
+
 #include "heap_buffer.h"
 #include "och_virtual_keys.h"
 #include "och_utf8.h"
@@ -316,6 +318,8 @@ struct vulkan_context
 
 	VkDebugUtilsMessengerEXT m_debug_messenger{};
 
+	och::iohandle m_debug_output_handle{};
+
 
 
 	VkSwapchainKHR m_swapchain{};
@@ -377,7 +381,7 @@ struct vulkan_context
 	simple_vec<input_event_desc> m_input_events{ 0 };
 
 
-	och::status create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
+	och::status create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const och::iohandle& debug_output_handle = och::get_stdout(), const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
 
 	void destroy() const noexcept;
 

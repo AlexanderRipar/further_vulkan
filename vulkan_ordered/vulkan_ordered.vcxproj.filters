@@ -219,5 +219,8 @@
     <None Include="shaders\simplex3d_layered.comp">
       <Filter>samples\voxel_volume</Filter>
     </None>
+    <None Include="shaders\voxel_volume_init.comp">
+      <Filter>samples\voxel_volume</Filter>
+    </None>
   </ItemGroup>
 </Project>

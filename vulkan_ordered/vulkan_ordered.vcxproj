@@ -299,6 +299,7 @@
     <None Include="shaders\tutorial.frag.spv" />
     <None Include="shaders\tutorial.vert" />
     <None Include="shaders\tutorial.vert.spv" />
+    <None Include="shaders\voxel_volume_init.comp" />
     <None Include="shaders\voxel_volume_trace.comp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

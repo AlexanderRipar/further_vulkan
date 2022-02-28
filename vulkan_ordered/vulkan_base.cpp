@@ -31,7 +31,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(VkDebugUtilsMessageSeverity
 		msg_id == 0x7CD0'911D)		// vkCreateSwapchainKHR wrong image extent (not fixable due to race condition)
 		return VK_FALSE;
 
-	och::print("{:X}\n{}\n\n", callback_data->messageIdNumber, callback_data->pMessage);
+	och::print(static_cast<const vulkan_context*>(user_data)->m_debug_output_handle, "{:X}\n{}\n\n", callback_data->messageIdNumber, callback_data->pMessage);
 
 	return VK_FALSE;
 }
@@ -264,12 +264,14 @@ DWORD message_pump_thread_fn(void* data)
 
 
 
-och::status vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
+och::status vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const och::iohandle& debug_output_handle, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
 {
 	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
 		return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
 	m_app_name = app_name;
+
+	m_debug_output_handle.set_(debug_output_handle.get_());
 
 	// Create message pump thread
 	{
@@ -330,9 +332,12 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 	// Fill debug messenger creation info
 	VkDebugUtilsMessengerCreateInfoEXT messenger_ci{};
 	messenger_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	messenger_ci.pNext = nullptr;
+	messenger_ci.flags = 0;
 	messenger_ci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 	messenger_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
 	messenger_ci.pfnUserCallback = vulkan_debug_callback;
+	messenger_ci.pUserData = this;
 
 	// Create instance
 	{
