@@ -66,7 +66,11 @@ struct compute_image_to_swapchain
 	{
 		is_using_simplex = use_simplex;
 
-		check(context.create("Compute to Swapchain", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
+		vulkan_context_create_info context_ci{};
+		context_ci.app_name = "Compute to Swapchain";
+		context_ci.swapchain_image_usage = VK_IMAGE_USAGE_STORAGE_BIT;
+
+		check(context.create(&context_ci));
 
 		// Create Compute Pipeline
 		{

@@ -6,6 +6,28 @@
 
 #include "och_matmath.h"
 #include "och_fmt.h"
+#include "och_timer.h"
+
+bool voxel_volume_physical_device_suitable_callback(VkPhysicalDevice device) noexcept
+{
+	VkPhysicalDeviceSubgroupProperties subgroup_props{};
+	subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+	subgroup_props.pNext = nullptr;
+
+	VkPhysicalDeviceProperties2 props2;
+	props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	props2.pNext = &subgroup_props;
+
+	vkGetPhysicalDeviceProperties2(device, &props2);
+
+	if ((subgroup_props.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) == 0)
+		return false;
+
+	if ((subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT) == 0)
+		return false;
+
+	return true;
+}
 
 struct voxel_volume
 {
@@ -147,140 +169,246 @@ struct voxel_volume
 					set base entry to point to brick
 		*/ 
 
-		struct pop_push_constant_data_t
+		struct ce_and_fb_push_constant_data_t
 		{
 			och::vec3 offset;
 			float scale;
 			float cutoff;
 		};
 
-		static constexpr uint32_t POPULATE_GROUP_SIZE_X = 8;
+		static constexpr uint32_t CHECKEMPTY_GROUP_SIZE_X = 4;
+		static constexpr uint32_t CHECKEMPTY_GROUP_SIZE_Y = 4;
+		static constexpr uint32_t CHECKEMPTY_GROUP_SIZE_Z = 4;
 
-		static constexpr uint32_t POPULATE_GROUP_SIZE_Y = 8;
+		static constexpr uint32_t ASSIGNINDEX_GROUP_SIZE_X = 4;
+		static constexpr uint32_t ASSIGNINDEX_GROUP_SIZE_Y = 4;
+		static constexpr uint32_t ASSIGNINDEX_GROUP_SIZE_Z = 4;
 
-		static constexpr uint32_t POPULATE_GROUP_SIZE_Z = 8;
-
-		VkDescriptorPool pop_descriptor_pool;
-
-		VkDescriptorSetLayout pop_descriptor_set_layout;
-
-		VkDescriptorSet pop_descriptor_set;
+		static constexpr uint32_t FILLBRICKS_GROUP_SIZE_X = 4;
+		static constexpr uint32_t FILLBRICKS_GROUP_SIZE_Y = 4;
+		static constexpr uint32_t FILLBRICKS_GROUP_SIZE_Z = 4;
 
 		VkCommandPool pop_command_pool;
 
 		VkCommandBuffer pop_command_buffer;
 
-		VkPipelineLayout pop_pipeline_layout;
-
-		VkShaderModule pop_shader_module;
-
-		VkPipeline pop_pipeline;
-
-		VkDeviceMemory brick_index_memory;
-
-		VkBuffer brick_index_buffer;
+		VkDescriptorPool pop_descriptor_pool;
 
 
 
-		// Create brick index buffer
-		check(ctx.create_buffer(brick_index_buffer, brick_index_memory, 64 * 4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		VkDescriptorSetLayout pop_descriptor_set_layouts[3];
 
-		// Create Pipeline
+		VkPipelineLayout pop_pipeline_layouts[3];
+
+		VkShaderModule pop_shader_modules[3];
+
+		VkPipeline pop_pipelines[3];
+
+		VkDescriptorSet pop_descriptor_sets[3];
+
+
+
+		VkBuffer pop_atomic_index_buffer;
+
+		VkDeviceMemory pop_atomic_index_memory;
+
+		VkBuffer pop_staging_buffer;
+
+		VkDeviceMemory pop_staging_memory;
+
+
+
+		och::print("Started initialising bricks.\n");
+
+		och::timer brick_init_timer;
+
+		
+
+		// Create atomic counter buffer for indexing into brick buffer.
+		check(ctx.create_buffer(pop_atomic_index_buffer, pop_atomic_index_memory, 
+			4, 
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+
+		// Create buffer for temporarily holding number of brick elements for all bricks
+		check(ctx.create_buffer(pop_staging_buffer, pop_staging_memory, 
+			BASE_DIM* BASE_DIM* BASE_DIM* LEVEL_CNT * 4, 
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+
+		// Create Pipelines
 		{
-			VkDescriptorSetLayoutBinding bindings[3]{};
+			uint32_t binding_cnts[]{ 1, 3, 2 };
+			uint32_t binding_begs[]{ 0, 1, 4 };
+
+			VkDescriptorSetLayoutBinding bindings[6];
+			// checkempty
 			bindings[0].binding = 0;
-			bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			bindings[0].descriptorCount = 1;
 			bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 			bindings[0].pImmutableSamplers = nullptr;
-			bindings[1].binding = 1;
+			// assignindex
+			bindings[1].binding = 0;
 			bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			bindings[1].descriptorCount = 1;
 			bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 			bindings[1].pImmutableSamplers = nullptr;
-			bindings[2].binding = 2;
+			bindings[2].binding = 1;
 			bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			bindings[2].descriptorCount = 1;
 			bindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 			bindings[2].pImmutableSamplers = nullptr;
+			bindings[3].binding = 2;
+			bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			bindings[3].descriptorCount = 1;
+			bindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			bindings[3].pImmutableSamplers = nullptr;
+			// fillbricks
+			bindings[4].binding = 0;
+			bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			bindings[4].descriptorCount = 1;
+			bindings[4].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			bindings[4].pImmutableSamplers = nullptr;
+			bindings[5].binding = 1;
+			bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			bindings[5].descriptorCount = 1;
+			bindings[5].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			bindings[5].pImmutableSamplers = nullptr;
 
-			VkDescriptorSetLayoutCreateInfo descriptor_set_layout_ci{};
-			descriptor_set_layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			descriptor_set_layout_ci.pNext = nullptr;
-			descriptor_set_layout_ci.flags = 0;
-			descriptor_set_layout_ci.bindingCount = 3;
-			descriptor_set_layout_ci.pBindings = bindings;
+			VkPushConstantRange checkempty_and_fillbricks_push_constant_range;
+			checkempty_and_fillbricks_push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			checkempty_and_fillbricks_push_constant_range.offset = 0;
+			checkempty_and_fillbricks_push_constant_range.size = sizeof(ce_and_fb_push_constant_data_t);
 
-			check(vkCreateDescriptorSetLayout(ctx.m_device, &descriptor_set_layout_ci, nullptr, &pop_descriptor_set_layout));
+			VkPushConstantRange* push_constant_ranges[3]{ &checkempty_and_fillbricks_push_constant_range, nullptr, &checkempty_and_fillbricks_push_constant_range };
 
-			VkPushConstantRange push_constant_range{};
-			push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-			push_constant_range.offset = 0;
-			push_constant_range.size = sizeof(pop_push_constant_data_t);
+			const char* shader_module_names[3]{
+				OCH_DIR "shaders\\voxel_volume_init_checkempty.comp.spv",
+				OCH_DIR "shaders\\voxel_volume_init_assignindex.comp.spv",
+				OCH_DIR "shaders\\voxel_volume_init_fillbricks.comp.spv",
+			};
 
-			VkPipelineLayoutCreateInfo pipeline_layout_ci{};
-			pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			pipeline_layout_ci.pNext = nullptr;
-			pipeline_layout_ci.flags = 0;
-			pipeline_layout_ci.setLayoutCount = 1;
-			pipeline_layout_ci.pSetLayouts = &pop_descriptor_set_layout;
-			pipeline_layout_ci.pushConstantRangeCount = 1;
-			pipeline_layout_ci.pPushConstantRanges = &push_constant_range;
-
-			check(vkCreatePipelineLayout(ctx.m_device, &pipeline_layout_ci, nullptr, &pop_pipeline_layout));
-
-			check(ctx.load_shader_module_file(pop_shader_module, OCH_DIR "shaders\\voxel_volume_init.comp.spv"));
+			struct 
+			{
+				uint32_t group_size_x = CHECKEMPTY_GROUP_SIZE_X;
+				uint32_t group_size_y = CHECKEMPTY_GROUP_SIZE_Y;
+				uint32_t group_size_z = CHECKEMPTY_GROUP_SIZE_Z;
+				uint32_t base_dim_log2 = BASE_DIM_LOG2;
+				uint32_t brick_dim_log2 = BRICK_DIM_LOG2;
+			} checkempty_specialization_data;
 
 			struct
 			{
+				uint32_t group_size_x = ASSIGNINDEX_GROUP_SIZE_X;
+				uint32_t group_size_y = ASSIGNINDEX_GROUP_SIZE_Y;
+				uint32_t group_size_z = ASSIGNINDEX_GROUP_SIZE_Z;
 				uint32_t base_dim_log2 = BASE_DIM_LOG2;
-			} constant_data;
+				uint32_t brick_dim_log2 = BRICK_DIM_LOG2;
+			} assignindex_specialization_data;
+
+			struct
+			{
+				uint32_t group_size_x = FILLBRICKS_GROUP_SIZE_X;
+				uint32_t group_size_y = FILLBRICKS_GROUP_SIZE_Y;
+				uint32_t group_size_z = FILLBRICKS_GROUP_SIZE_Z;
+				uint32_t base_dim_log2 = BASE_DIM_LOG2;
+				uint32_t brick_dim_log2 = BRICK_DIM_LOG2;
+			} fillbricks_specialization_data;
+
+			uint32_t specialization_map_cnts[3]{ 5, 5, 5 };
+			uint32_t specialization_map_begs[3]{ 0, 5, 10 };
+			
+			uint32_t specialization_data_sizes[3]{ sizeof(checkempty_specialization_data), sizeof(assignindex_specialization_data), sizeof(fillbricks_specialization_data) };
+
+			void* specialization_datums[3]{ &checkempty_specialization_data, &assignindex_specialization_data, &fillbricks_specialization_data };
 
 			VkSpecializationMapEntry specialization_map_entries[]{
-				{ 1, offsetof(decltype(constant_data), base_dim_log2), sizeof(constant_data.base_dim_log2) },
+				{ 1, offsetof(decltype(checkempty_specialization_data), group_size_x  ), sizeof(checkempty_specialization_data.group_size_x  ) },
+				{ 2, offsetof(decltype(checkempty_specialization_data), group_size_y  ), sizeof(checkempty_specialization_data.group_size_y  ) },
+				{ 3, offsetof(decltype(checkempty_specialization_data), group_size_z  ), sizeof(checkempty_specialization_data.group_size_z  ) },
+				{ 4, offsetof(decltype(checkempty_specialization_data), base_dim_log2 ), sizeof(checkempty_specialization_data.base_dim_log2 ) },
+				{ 5, offsetof(decltype(checkempty_specialization_data), brick_dim_log2), sizeof(checkempty_specialization_data.brick_dim_log2) },
+				{ 1, offsetof(decltype(assignindex_specialization_data), group_size_x  ), sizeof(assignindex_specialization_data.group_size_x  ) },
+				{ 2, offsetof(decltype(assignindex_specialization_data), group_size_y  ), sizeof(assignindex_specialization_data.group_size_y  ) },
+				{ 3, offsetof(decltype(assignindex_specialization_data), group_size_z  ), sizeof(assignindex_specialization_data.group_size_z  ) },
+				{ 4, offsetof(decltype(assignindex_specialization_data), base_dim_log2 ), sizeof(assignindex_specialization_data.base_dim_log2 ) },
+				{ 5, offsetof(decltype(assignindex_specialization_data), brick_dim_log2), sizeof(assignindex_specialization_data.brick_dim_log2) },
+				{ 1, offsetof(decltype(fillbricks_specialization_data), group_size_x  ), sizeof(fillbricks_specialization_data.group_size_x  ) },
+				{ 2, offsetof(decltype(fillbricks_specialization_data), group_size_y  ), sizeof(fillbricks_specialization_data.group_size_y  ) },
+				{ 3, offsetof(decltype(fillbricks_specialization_data), group_size_z  ), sizeof(fillbricks_specialization_data.group_size_z  ) },
+				{ 4, offsetof(decltype(fillbricks_specialization_data), base_dim_log2 ), sizeof(fillbricks_specialization_data.base_dim_log2 ) },
+				{ 5, offsetof(decltype(fillbricks_specialization_data), brick_dim_log2), sizeof(fillbricks_specialization_data.brick_dim_log2) },
 			};
 
-			VkSpecializationInfo specialization_info{};
-			specialization_info.mapEntryCount = 1;
-			specialization_info.pMapEntries = specialization_map_entries;
-			specialization_info.dataSize = sizeof(constant_data);
-			specialization_info.pData = &constant_data;
+			VkSpecializationInfo specialization_infos[3];
 
-			VkPipelineShaderStageCreateInfo shader_stage_ci{};
-			shader_stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			shader_stage_ci.pNext = nullptr;
-			shader_stage_ci.flags = 0;
-			shader_stage_ci.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-			shader_stage_ci.module = pop_shader_module;
-			shader_stage_ci.pName = "main";
-			shader_stage_ci.pSpecializationInfo = &specialization_info;
+			for (uint32_t i = 0; i != 3; ++i)
+			{
+				specialization_infos[i].mapEntryCount = specialization_map_cnts[i];
+				specialization_infos[i].pMapEntries = specialization_map_entries + specialization_map_begs[i];
+				specialization_infos[i].dataSize = specialization_data_sizes[i];
+				specialization_infos[i].pData = specialization_datums[i];
+			}
 
-			VkComputePipelineCreateInfo pipeline_ci{};
-			pipeline_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-			pipeline_ci.pNext = nullptr;
-			pipeline_ci.flags = 0;
-			pipeline_ci.stage = shader_stage_ci;
-			pipeline_ci.layout = pop_pipeline_layout;
-			pipeline_ci.basePipelineHandle = nullptr;
-			pipeline_ci.basePipelineIndex = -1;
+			VkComputePipelineCreateInfo pipeline_cis[3];
 
-			check(vkCreateComputePipelines(ctx.m_device, nullptr, 1, &pipeline_ci, nullptr, &pop_pipeline));
+			for (uint32_t i = 0; i != 3; ++i)
+			{
+				VkDescriptorSetLayoutCreateInfo descriptor_set_layout_ci{};
+				descriptor_set_layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				descriptor_set_layout_ci.pNext = nullptr;
+				descriptor_set_layout_ci.flags = 0;
+				descriptor_set_layout_ci.bindingCount = binding_cnts[i];
+				descriptor_set_layout_ci.pBindings = &bindings[binding_begs[i]];
+
+				check(vkCreateDescriptorSetLayout(ctx.m_device, &descriptor_set_layout_ci, nullptr, &pop_descriptor_set_layouts[i]));
+
+				VkPipelineLayoutCreateInfo pipeline_layout_ci{};
+				pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+				pipeline_layout_ci.pNext = nullptr;
+				pipeline_layout_ci.flags = 0;
+				pipeline_layout_ci.setLayoutCount = 1;
+				pipeline_layout_ci.pSetLayouts = &pop_descriptor_set_layouts[i];
+				pipeline_layout_ci.pushConstantRangeCount = push_constant_ranges[i] == nullptr ? 0 : 1;
+				pipeline_layout_ci.pPushConstantRanges = push_constant_ranges[i];
+
+				check(vkCreatePipelineLayout(ctx.m_device, &pipeline_layout_ci, nullptr, &pop_pipeline_layouts[i]));
+
+				check(ctx.load_shader_module_file(pop_shader_modules[i], shader_module_names[i]));
+				
+				pipeline_cis[i].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+				pipeline_cis[i].pNext = nullptr;
+				pipeline_cis[i].flags = 0;
+				pipeline_cis[i].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+				pipeline_cis[i].stage.pNext = nullptr;
+				pipeline_cis[i].stage.flags = 0;
+				pipeline_cis[i].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+				pipeline_cis[i].stage.module = pop_shader_modules[i];
+				pipeline_cis[i].stage.pName = "main";
+				pipeline_cis[i].stage.pSpecializationInfo = &specialization_infos[i];
+				pipeline_cis[i].layout = pop_pipeline_layouts[i];
+				pipeline_cis[i].basePipelineHandle = nullptr;
+				pipeline_cis[i].basePipelineIndex = -1;
+			}
+
+			check(vkCreateComputePipelines(ctx.m_device, nullptr, _countof(pipeline_cis), pipeline_cis, nullptr, pop_pipelines));
 		}
 
 		// Create Descriptor Sets
 		{
 			VkDescriptorPoolSize pool_sizes[2];
 			pool_sizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			pool_sizes[0].descriptorCount = 1;
+			pool_sizes[0].descriptorCount = 2;
 			pool_sizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			pool_sizes[1].descriptorCount = 2;
+			pool_sizes[1].descriptorCount = 4;
 
 			VkDescriptorPoolCreateInfo descriptor_pool_ci{};
 			descriptor_pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 			descriptor_pool_ci.pNext = nullptr;
 			descriptor_pool_ci.flags = 0;
-			descriptor_pool_ci.maxSets = 1;
-			descriptor_pool_ci.poolSizeCount = 2;
+			descriptor_pool_ci.maxSets = 3;
+			descriptor_pool_ci.poolSizeCount = _countof(pool_sizes);
 			descriptor_pool_ci.pPoolSizes = pool_sizes;
 
 			check(vkCreateDescriptorPool(ctx.m_device, &descriptor_pool_ci, nullptr, &pop_descriptor_pool));
@@ -289,60 +417,97 @@ struct voxel_volume
 			descriptor_set_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			descriptor_set_ai.pNext = nullptr;
 			descriptor_set_ai.descriptorPool = pop_descriptor_pool;
-			descriptor_set_ai.descriptorSetCount = 1;
-			descriptor_set_ai.pSetLayouts = &pop_descriptor_set_layout;
+			descriptor_set_ai.descriptorSetCount = 3;
+			descriptor_set_ai.pSetLayouts = pop_descriptor_set_layouts;
 
-			check(vkAllocateDescriptorSets(ctx.m_device, &descriptor_set_ai, &pop_descriptor_set));
+			check(vkAllocateDescriptorSets(ctx.m_device, &descriptor_set_ai, pop_descriptor_sets));
 
 			VkDescriptorImageInfo base_image_info{};
 			base_image_info.sampler = nullptr;
 			base_image_info.imageView = base_image_view;
 			base_image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+			VkDescriptorBufferInfo atomic_index_buffer_info{};
+			atomic_index_buffer_info.buffer = pop_atomic_index_buffer;
+			atomic_index_buffer_info.offset = 0;
+			atomic_index_buffer_info.range = VK_WHOLE_SIZE;
+
 			VkDescriptorBufferInfo brick_buffer_info{};
 			brick_buffer_info.buffer = brick_buffer;
 			brick_buffer_info.offset = 0;
 			brick_buffer_info.range = VK_WHOLE_SIZE;
 
-			VkDescriptorBufferInfo brick_index_buffer_info{};
-			brick_index_buffer_info.buffer = brick_index_buffer;
-			brick_index_buffer_info.offset = 0;
-			brick_index_buffer_info.range = VK_WHOLE_SIZE;
+			VkDescriptorBufferInfo staging_buffer_info{};
+			staging_buffer_info.buffer = pop_staging_buffer;
+			staging_buffer_info.offset = 0;
+			staging_buffer_info.range = VK_WHOLE_SIZE;
 
-
-			VkWriteDescriptorSet write_descriptor_sets[3]{};
+			VkWriteDescriptorSet write_descriptor_sets[6]{};
+			// checkempty
 			write_descriptor_sets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write_descriptor_sets[0].pNext = nullptr;
-			write_descriptor_sets[0].dstSet = pop_descriptor_set;
+			write_descriptor_sets[0].dstSet = pop_descriptor_sets[0];
 			write_descriptor_sets[0].dstBinding = 0;
 			write_descriptor_sets[0].dstArrayElement = 0;
 			write_descriptor_sets[0].descriptorCount = 1;
-			write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			write_descriptor_sets[0].pImageInfo = &base_image_info;
-			write_descriptor_sets[0].pBufferInfo = nullptr;
+			write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			write_descriptor_sets[0].pImageInfo = nullptr;
+			write_descriptor_sets[0].pBufferInfo = &staging_buffer_info;
 			write_descriptor_sets[0].pTexelBufferView = nullptr;
+			// assignindex
 			write_descriptor_sets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write_descriptor_sets[1].pNext = nullptr;
-			write_descriptor_sets[1].dstSet = pop_descriptor_set;
-			write_descriptor_sets[1].dstBinding = 1;
+			write_descriptor_sets[1].dstSet = pop_descriptor_sets[1];
+			write_descriptor_sets[1].dstBinding = 0;
 			write_descriptor_sets[1].dstArrayElement = 0;
 			write_descriptor_sets[1].descriptorCount = 1;
 			write_descriptor_sets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			write_descriptor_sets[1].pImageInfo = nullptr;
-			write_descriptor_sets[1].pBufferInfo = &brick_buffer_info;
+			write_descriptor_sets[1].pBufferInfo = &staging_buffer_info;
 			write_descriptor_sets[1].pTexelBufferView = nullptr;
 			write_descriptor_sets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write_descriptor_sets[2].pNext = nullptr;
-			write_descriptor_sets[2].dstSet = pop_descriptor_set;
-			write_descriptor_sets[2].dstBinding = 2;
+			write_descriptor_sets[2].dstSet = pop_descriptor_sets[1];
+			write_descriptor_sets[2].dstBinding = 1;
 			write_descriptor_sets[2].dstArrayElement = 0;
 			write_descriptor_sets[2].descriptorCount = 1;
 			write_descriptor_sets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			write_descriptor_sets[2].pImageInfo = nullptr;
-			write_descriptor_sets[2].pBufferInfo = &brick_index_buffer_info;
+			write_descriptor_sets[2].pBufferInfo = &atomic_index_buffer_info;
 			write_descriptor_sets[2].pTexelBufferView = nullptr;
+			write_descriptor_sets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_sets[3].pNext = nullptr;
+			write_descriptor_sets[3].dstSet = pop_descriptor_sets[1];
+			write_descriptor_sets[3].dstBinding = 2;
+			write_descriptor_sets[3].dstArrayElement = 0;
+			write_descriptor_sets[3].descriptorCount = 1;
+			write_descriptor_sets[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			write_descriptor_sets[3].pImageInfo = &base_image_info;
+			write_descriptor_sets[3].pBufferInfo = nullptr;
+			write_descriptor_sets[3].pTexelBufferView = nullptr;
+			// fillbricks
+			write_descriptor_sets[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_sets[4].pNext = nullptr;
+			write_descriptor_sets[4].dstSet = pop_descriptor_sets[2];
+			write_descriptor_sets[4].dstBinding = 0;
+			write_descriptor_sets[4].dstArrayElement = 0;
+			write_descriptor_sets[4].descriptorCount = 1;
+			write_descriptor_sets[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			write_descriptor_sets[4].pImageInfo = &base_image_info;
+			write_descriptor_sets[4].pBufferInfo = nullptr;
+			write_descriptor_sets[4].pTexelBufferView = nullptr;
+			write_descriptor_sets[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_sets[5].pNext = nullptr;
+			write_descriptor_sets[5].dstSet = pop_descriptor_sets[2];
+			write_descriptor_sets[5].dstBinding = 1;
+			write_descriptor_sets[5].dstArrayElement = 0;
+			write_descriptor_sets[5].descriptorCount = 1;
+			write_descriptor_sets[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			write_descriptor_sets[5].pImageInfo = nullptr;
+			write_descriptor_sets[5].pBufferInfo = &brick_buffer_info;
+			write_descriptor_sets[5].pTexelBufferView = nullptr;
 
-			vkUpdateDescriptorSets(ctx.m_device, 3, write_descriptor_sets, 0, nullptr);
+			vkUpdateDescriptorSets(ctx.m_device, _countof(write_descriptor_sets), write_descriptor_sets, 0, nullptr);
 		}
 
 		// Create Command Buffer
@@ -375,12 +540,49 @@ struct voxel_volume
 
 			check(vkBeginCommandBuffer(pop_command_buffer, &command_buffer_bi));
 
+			VkImageMemoryBarrier to_transfer_dst_barrier;
+			to_transfer_dst_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			to_transfer_dst_barrier.pNext = nullptr;
+			to_transfer_dst_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			to_transfer_dst_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			to_transfer_dst_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			to_transfer_dst_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			to_transfer_dst_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			to_transfer_dst_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			to_transfer_dst_barrier.image = base_image;
+			to_transfer_dst_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			to_transfer_dst_barrier.subresourceRange.baseMipLevel = 0;
+			to_transfer_dst_barrier.subresourceRange.levelCount = 1;
+			to_transfer_dst_barrier.subresourceRange.baseArrayLayer = 0;
+			to_transfer_dst_barrier.subresourceRange.layerCount = 1;
+
+			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_transfer_dst_barrier);
+
+
+
+			VkClearColorValue clear_colour;
+			clear_colour.uint32[0] = 0xFFFF;
+			clear_colour.uint32[1] = 0xFFFF;
+			clear_colour.uint32[2] = 0xFFFF;
+			clear_colour.uint32[3] = 0xFFFF;
+
+			VkImageSubresourceRange clear_range;
+			clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			clear_range.baseMipLevel = 0;
+			clear_range.levelCount = 1;
+			clear_range.baseArrayLayer = 0;
+			clear_range.layerCount = 1;
+
+			vkCmdClearColorImage(pop_command_buffer, base_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_colour, 1, &clear_range);
+
+
+
 			VkImageMemoryBarrier to_storage_barrier;
 			to_storage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			to_storage_barrier.pNext = nullptr;
-			to_storage_barrier.srcAccessMask = VK_ACCESS_NONE_KHR;
+			to_storage_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
 			to_storage_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-			to_storage_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			to_storage_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 			to_storage_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 			to_storage_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			to_storage_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -391,22 +593,83 @@ struct voxel_volume
 			to_storage_barrier.subresourceRange.baseArrayLayer = 0;
 			to_storage_barrier.subresourceRange.layerCount = 1;
 
-			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_storage_barrier);
+			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_storage_barrier);
 
-			pop_push_constant_data_t push_constant_data;
+
+
+			ce_and_fb_push_constant_data_t push_constant_data;
 			push_constant_data.offset = { 0.0F, 0.0F, 0.0F };
-			push_constant_data.scale = 0.01F;
+			push_constant_data.scale = 0.01F / static_cast<float>(BRICK_DIM);
 			push_constant_data.cutoff = 0.6F;
 
-			vkCmdPushConstants(pop_command_buffer, pop_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data), &push_constant_data);
+			vkCmdPushConstants(pop_command_buffer, pop_pipeline_layouts[0], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data), &push_constant_data);
 
-			vkCmdBindDescriptorSets(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline_layout, 0, 1, &pop_descriptor_set, 0, nullptr);
+			vkCmdBindDescriptorSets(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline_layouts[0], 0, 1, &pop_descriptor_sets[0], 0, nullptr);
 
-			vkCmdBindPipeline(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline);
+			vkCmdBindPipeline(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipelines[0]);
 
-			vkCmdDispatch(pop_command_buffer, BASE_DIM, BASE_DIM, BASE_DIM);
+			vkCmdDispatch(pop_command_buffer, BASE_DIM * LEVEL_CNT * BRICK_DIM / CHECKEMPTY_GROUP_SIZE_X, BASE_DIM * BRICK_DIM / CHECKEMPTY_GROUP_SIZE_Y, BASE_DIM * BRICK_DIM / CHECKEMPTY_GROUP_SIZE_Z);
+
+
+
+			VkImageMemoryBarrier inter_dispatch_barrier;
+			inter_dispatch_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			inter_dispatch_barrier.pNext = nullptr;
+			inter_dispatch_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			inter_dispatch_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+			inter_dispatch_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			inter_dispatch_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			inter_dispatch_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			inter_dispatch_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			inter_dispatch_barrier.image = base_image;
+			inter_dispatch_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			inter_dispatch_barrier.subresourceRange.baseMipLevel = 0;
+			inter_dispatch_barrier.subresourceRange.levelCount = 1;
+			inter_dispatch_barrier.subresourceRange.baseArrayLayer = 0;
+			inter_dispatch_barrier.subresourceRange.layerCount = 1;
+
+			VkBufferMemoryBarrier staging_buffer_barrier;
+			staging_buffer_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			staging_buffer_barrier.pNext = nullptr;
+			staging_buffer_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			staging_buffer_barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+			staging_buffer_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			staging_buffer_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			staging_buffer_barrier.buffer = pop_atomic_index_buffer;
+			staging_buffer_barrier.offset = 0;
+			staging_buffer_barrier.size = VK_WHOLE_SIZE;
+			
+
+
+			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 1, &staging_buffer_barrier, 1, &inter_dispatch_barrier);
+			
+
+
+			vkCmdBindDescriptorSets(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline_layouts[1], 0, 1, &pop_descriptor_sets[1], 0, nullptr);
+			
+			vkCmdBindPipeline(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipelines[1]);
+			
+			vkCmdDispatch(pop_command_buffer, (BASE_DIM * LEVEL_CNT) / ASSIGNINDEX_GROUP_SIZE_X, BASE_DIM / ASSIGNINDEX_GROUP_SIZE_Y, BASE_DIM / ASSIGNINDEX_GROUP_SIZE_Z);
+			
+
+
+			vkCmdPipelineBarrier(pop_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &inter_dispatch_barrier);
+			
+			
+			
+			vkCmdPushConstants(pop_command_buffer, pop_pipeline_layouts[2], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data), &push_constant_data);
+			
+			vkCmdBindDescriptorSets(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipeline_layouts[2], 0, 1, &pop_descriptor_sets[2], 0, nullptr);
+			
+			vkCmdBindPipeline(pop_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pop_pipelines[2]);
+			
+			vkCmdDispatch(pop_command_buffer, BASE_DIM * LEVEL_CNT * BRICK_DIM / FILLBRICKS_GROUP_SIZE_X, BASE_DIM * BRICK_DIM / FILLBRICKS_GROUP_SIZE_Y, BASE_DIM * BRICK_DIM / FILLBRICKS_GROUP_SIZE_Z);
+
+
 
 			check(vkEndCommandBuffer(pop_command_buffer));
+
+
 
 			VkSubmitInfo submit_info{};
 			submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -424,23 +687,40 @@ struct voxel_volume
 
 		check(vkQueueWaitIdle(ctx.m_general_queues[0]));
 
+		uint32_t* staging_ptr;
+
+		check(vkMapMemory(ctx.m_device, pop_atomic_index_memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&staging_ptr)));
+
+		och::print("Brick IDs used: {} / {} ({} remaining)\n", *staging_ptr, 0xFFFE, 0xFFFE - *staging_ptr);
+
+		vkUnmapMemory(ctx.m_device, pop_atomic_index_memory);
+
+		vkDestroyBuffer(ctx.m_device, pop_staging_buffer, nullptr);
+
+		vkFreeMemory(ctx.m_device, pop_staging_memory, nullptr);
+
+		vkDestroyBuffer(ctx.m_device, pop_atomic_index_buffer, nullptr);
+
+		vkFreeMemory(ctx.m_device, pop_atomic_index_memory, nullptr);
+
 		vkDestroyCommandPool(ctx.m_device, pop_command_pool, nullptr);
 
 		vkDestroyDescriptorPool(ctx.m_device, pop_descriptor_pool, nullptr);
 
-		vkDestroyPipeline(ctx.m_device, pop_pipeline, nullptr);
+		for (uint32_t i = 0; i != 3; ++i)
+		{
+			vkDestroyPipeline(ctx.m_device, pop_pipelines[i], nullptr);
 
-		vkDestroyShaderModule(ctx.m_device, pop_shader_module, nullptr);
+			vkDestroyShaderModule(ctx.m_device, pop_shader_modules[i], nullptr);
 
-		vkDestroyPipelineLayout(ctx.m_device, pop_pipeline_layout, nullptr);
+			vkDestroyPipelineLayout(ctx.m_device, pop_pipeline_layouts[i], nullptr);
 
-		vkDestroyDescriptorSetLayout(ctx.m_device, pop_descriptor_set_layout, nullptr);
+			vkDestroyDescriptorSetLayout(ctx.m_device, pop_descriptor_set_layouts[i], nullptr);
+		}
 
-		vkDestroyBuffer(ctx.m_device, brick_index_buffer, nullptr);
+		och::timespan brick_init_time = brick_init_timer.read();
 
-		vkFreeMemory(ctx.m_device, brick_index_memory, nullptr);
-		
-		return {};
+		och::print("Finished initializing bricks in {}\n", brick_init_time);
 
 		return {};
 	}
@@ -1254,7 +1534,15 @@ struct voxel_volume
 
 	och::status create() noexcept
 	{
-		check(ctx.create("Voxel Volume", 1440, 810, 1, 0, 0, VK_IMAGE_USAGE_STORAGE_BIT));
+		vulkan_context_create_info context_ci{};
+		context_ci.app_name = "Voxel Volume";
+		context_ci.window_width = 1440;
+		context_ci.window_height = 810;
+		context_ci.requested_api_version = VK_API_VERSION_1_1;
+		context_ci.swapchain_image_usage = VK_IMAGE_USAGE_STORAGE_BIT;
+		context_ci.physical_device_suitable_callback = voxel_volume_physical_device_suitable_callback;
+
+		check(ctx.create(&context_ci));
 
 		// Create Base Image
 		check(ctx.create_image_with_view(base_image_view, base_image, base_image_memory, 
@@ -1502,7 +1790,7 @@ struct voxel_volume
 			}
 		}
 
-		//check(temp_populate_multi_layer());
+		// check(temp_populate_multi_layer());
 		
 		check(temp_populate_bricks());
 

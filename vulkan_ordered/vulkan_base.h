@@ -266,7 +266,24 @@ struct queue_family_info
 	const VkQueue& operator[](size_t n) const noexcept { return queues[n - offset]; }
 };
 
+using physical_device_suitable_callback_fn = bool (*) (const VkPhysicalDevice physical_device) noexcept;
 
+struct vulkan_context_create_info
+{
+	const char* app_name = "[[???]]";
+	uint32_t window_width = 1440;
+	uint32_t window_height = 810;
+	uint32_t requested_general_queues = 1;
+	uint32_t requested_compute_queues = 0;
+	uint32_t requested_transfer_queues = 0;
+	VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	uint32_t requested_api_version = VK_API_VERSION_1_0;
+	bool allow_compute_graphics_queue_merge = true;
+	bool allow_window_resizing = true;
+	const VkPhysicalDeviceFeatures2* enabled_device_features2;
+	physical_device_suitable_callback_fn physical_device_suitable_callback = nullptr;
+	och::iohandle debug_output_handle = och::get_stdout();
+};
 
 struct vulkan_context
 {
@@ -381,7 +398,7 @@ struct vulkan_context
 	simple_vec<input_event_desc> m_input_events{ 0 };
 
 
-	och::status create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues = 1, uint32_t requested_compute_queues = 0, uint32_t requested_transfer_queues = 0, VkImageUsageFlags swapchain_image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, const och::iohandle& debug_output_handle = och::get_stdout(), const VkPhysicalDeviceFeatures* enabled_device_features = nullptr, bool allow_compute_graphics_merge = true) noexcept;
+	och::status create(const vulkan_context_create_info* create_info) noexcept;
 
 	void destroy() const noexcept;
 

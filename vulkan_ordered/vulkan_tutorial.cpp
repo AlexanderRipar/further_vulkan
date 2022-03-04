@@ -211,7 +211,12 @@ struct vulkan_tutorial
 
 		och::timer init_timer;
 
-		check(context.create("Hello Vulkan", window_width, window_height));
+		vulkan_context_create_info context_ci{};
+		context_ci.app_name = "Hello Vulkan";
+		context_ci.window_width = window_width;
+		context_ci.window_height = window_height;
+
+		check(context.create(&context_ci));
 
 		check(create_vk_render_pass());
 

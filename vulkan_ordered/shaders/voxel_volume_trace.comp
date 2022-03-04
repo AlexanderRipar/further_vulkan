@@ -91,6 +91,7 @@ void main()
 
 			if (base_value != 0xFFFF)
 			{
+				
 				vec3 last_step;
 
 				if(min_time == -1.0)

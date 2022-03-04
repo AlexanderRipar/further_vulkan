@@ -1,18 +1,20 @@
 #version 450
 
-layout (local_size_x = 16, local_size_y = 16, local_size_z = 16) in;
+#extension GL_KHR_shader_subgroup_ballot: enable
 
-layout (constant_id = 1) const uint BASE_DIM_LOG2 = 6;
+layout (local_size_x_id = 1) in;
+layout (local_size_y_id = 2) in;
+layout (local_size_z_id = 3) in;
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
-layout (binding = 0, r16ui) uniform writeonly uimage3D base_image;
+layout (constant_id = 4) const uint BASE_DIM_LOG2 = 6;
+layout (constant_id = 5) const uint BRICK_DIM_LOG2 = 4;
 
-layout (binding = 1) writeonly buffer Bricks {
+layout (binding = 0, r16ui) uniform readonly uimage3D base_image;
+
+layout (binding = 1) writeonly buffer Brick_buffer {
 	uint elems[];
 } bricks;
-
-layout (binding = 2) buffer Indices {
-	uint idx[];
-} indices;
 
 layout (push_constant) uniform Push_data
 {
@@ -20,10 +22,6 @@ layout (push_constant) uniform Push_data
 	float scale;
 	float cutoff;
 } push_data;
-
-
-
-const uint BASE_DIM = 1u << BASE_DIM_LOG2;
 
 
 
@@ -116,55 +114,27 @@ float simplex3d(vec3 pos)
 	return 38.0 * (t0 + t1 + t2 + t3) + 0.5;
 }
 
-shared uint sh_brick_has_elems;
-
 void main()
 {
-	if (gl_LocalInvocationIndex == 0)
-		sh_brick_has_elems = 0;
+	uint brick_index;
 
-	barrier();
+	if(subgroupElect())
+		brick_index = imageLoad(base_image, ivec3(gl_GlobalInvocationID >> BRICK_DIM_LOG2)).x;
 
-	memoryBarrierShared();
+	brick_index = subgroupBroadcastFirst(brick_index);
 
-	float level_scale = float(1 << (gl_GlobalInvocationID.x >> BASE_DIM_LOG2));
+	if(brick_index == 0xFFFF || brick_index == 0xFFFE)
+		return;
+
+	brick_index = brick_index * (1 << (BRICK_DIM_LOG2 * 3)) + gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * (1 << BRICK_DIM_LOG2) + gl_GlobalInvocationID.z * (1 << (BRICK_DIM_LOG2 * 2));
+
+	float level_scale = float(1 << (gl_GlobalInvocationID.x >> (BASE_DIM_LOG2 + BRICK_DIM_LOG2)));
 	
-	vec3 invocation_pos = vec3(gl_GlobalInvocationID) - float(1 << (BASE_DIM_LOG2 - 1));
+	vec3 invocation_pos = vec3((gl_GlobalInvocationID.x & ((1 << (BASE_DIM_LOG2 + BRICK_DIM_LOG2)) - 1)), gl_GlobalInvocationID.yz) - float(1 << (BASE_DIM_LOG2 + BRICK_DIM_LOG2 - 1));
 
 	vec3 pos = invocation_pos * push_data.scale * level_scale + push_data.offset;
 	
 	float simplex_val = simplex3d(pos);
 
-	if (simplex_val < push_data.cutoff)
-		sh_brick_has_elems = 1;
-
-	barrier();
-
-	memoryBarrierShared();
-
-	uint brick_index;
-	
-	if (gl_LocalInvocationIndex == 0)
-	{
-		if(sh_brick_has_elems != 0)
-		{
-			// From here on out sh_brick_has_elems is used as an index into the brick storage.
-
-			sh_brick_has_elems = atomicAdd(indices.idx[gl_WorkGroupID.x], 1);
-			
-			imageStore(base_image, ivec3(gl_WorkGroupID), uvec4(sh_brick_has_elems));
-		}
-		else
-		{
-			imageStore(base_image, ivec3(gl_WorkGroupID), uvec4(0xFFFF));
-		}
-	}
-
-	barrier();
-	
-	memoryBarrierShared();
-
-	uint brick_idx = sh_brick_has_elems * 16 * 16 * 16 + gl_LocalInvocationIndex;
-
-	bricks.elems[brick_idx] = simplex_val < push_data.cutoff ? 0x1 : 0xFFFF;
+	bricks.elems[brick_index] = simplex_val > push_data.cutoff ? 1u : 0u;
 }

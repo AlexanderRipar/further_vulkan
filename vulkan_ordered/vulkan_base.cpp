@@ -264,14 +264,14 @@ DWORD message_pump_thread_fn(void* data)
 
 
 
-och::status vulkan_context::create(const char* app_name, uint32_t window_width, uint32_t window_height, uint32_t requested_general_queues, uint32_t requested_compute_queues, uint32_t requested_transfer_queues, VkImageUsageFlags swapchain_image_usage, const och::iohandle& debug_output_handle, const VkPhysicalDeviceFeatures* enabled_device_features, bool allow_compute_graphics_merge) noexcept
+och::status vulkan_context::create(const vulkan_context_create_info* create_info) noexcept
 {
-	if (requested_general_queues > queue_family_info::MAX_QUEUE_CNT || requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
+	if (create_info->requested_general_queues > queue_family_info::MAX_QUEUE_CNT || create_info->requested_compute_queues > queue_family_info::MAX_QUEUE_CNT || create_info->requested_transfer_queues > queue_family_info::MAX_QUEUE_CNT)
 		return to_status(VK_ERROR_TOO_MANY_OBJECTS);
 
-	m_app_name = app_name;
+	m_app_name = create_info->app_name;
 
-	m_debug_output_handle.set_(debug_output_handle.get_());
+	m_debug_output_handle = create_info->debug_output_handle;
 
 	// Create message pump thread
 	{
@@ -289,7 +289,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 		// Set requested window size in _init_... union member to let the creating thread know what to do
 
-		m_swapchain_extent = { window_width, window_height };
+		m_swapchain_extent = { create_info->window_width, create_info->window_height };
 
 
 		// Now create the thread
@@ -339,15 +339,33 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 	messenger_ci.pfnUserCallback = vulkan_debug_callback;
 	messenger_ci.pUserData = this;
 
+	// Check if the vulkan instance supports the requested api version
+	{
+		if (VK_API_VERSION_MAJOR(create_info->requested_api_version) != 1 || VK_API_VERSION_MINOR(create_info->requested_api_version) != 0)
+		{
+			PFN_vkEnumerateInstanceVersion instance_version_fn = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion"));
+
+			if (instance_version_fn == nullptr)
+				return to_status(och::error::argument_too_large);
+
+			uint32_t present_api_version;
+
+			check(instance_version_fn(&present_api_version));
+
+			if (present_api_version < create_info->requested_api_version)
+				return to_status(och::error::argument_too_large);
+		}
+	}
+
 	// Create instance
 	{
 		VkApplicationInfo app_info{};
 		app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		app_info.pApplicationName = app_name;
+		app_info.pApplicationName = create_info->app_name;
 		app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
 		app_info.pEngineName = "No Engine";
 		app_info.engineVersion = VK_MAKE_VERSION(0, 0, 0);
-		app_info.apiVersion = VK_API_VERSION_1_0;
+		app_info.apiVersion = create_info->requested_api_version;
 
 		bool supports_extensions;
 		check(s_feats.check_instance_support(supports_extensions));
@@ -418,6 +436,11 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			if (properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				continue;
 
+			// Check support for client-specific requirements
+
+			if (create_info->physical_device_suitable_callback != nullptr && create_info->physical_device_suitable_callback(dev) == false)
+				continue;
+
 			// Check support for required extensions and layers
 
 			bool supports_extensions;
@@ -456,7 +479,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			{
 				const uint32_t supported_queue_cnt = queue_family_info::MAX_QUEUE_CNT < family_properties[general_queue_index].queueCount ? queue_family_info::MAX_QUEUE_CNT : family_properties[general_queue_index].queueCount;
 
-				if (allow_compute_graphics_merge && general_queue_index != VK_QUEUE_FAMILY_IGNORED && requested_general_queues + requested_compute_queues <= supported_queue_cnt)
+				if (create_info->allow_compute_graphics_queue_merge && general_queue_index != VK_QUEUE_FAMILY_IGNORED && create_info->requested_general_queues + create_info->requested_compute_queues <= supported_queue_cnt)
 				{
 					compute_queue_index = general_queue_index;
 
@@ -468,9 +491,9 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			else
 				m_flags.separate_compute_and_general_queue = true;
 
-			if (((general_queue_index == VK_QUEUE_FAMILY_IGNORED && requested_general_queues) || (requested_general_queues && family_properties[general_queue_index].queueCount < requested_general_queues)) ||
-				((compute_queue_index == VK_QUEUE_FAMILY_IGNORED && requested_compute_queues) || (requested_compute_queues && family_properties[compute_queue_index].queueCount < requested_compute_queues)) ||
-				((transfer_queue_index == VK_QUEUE_FAMILY_IGNORED && requested_transfer_queues) || (requested_transfer_queues && family_properties[transfer_queue_index].queueCount < requested_transfer_queues)))
+			if (((general_queue_index == VK_QUEUE_FAMILY_IGNORED && create_info->requested_general_queues) || (create_info->requested_general_queues && family_properties[general_queue_index].queueCount < create_info->requested_general_queues)) ||
+				((compute_queue_index == VK_QUEUE_FAMILY_IGNORED && create_info->requested_compute_queues) || (create_info->requested_compute_queues && family_properties[compute_queue_index].queueCount < create_info->requested_compute_queues)) ||
+				((transfer_queue_index == VK_QUEUE_FAMILY_IGNORED && create_info->requested_transfer_queues) || (create_info->requested_transfer_queues && family_properties[transfer_queue_index].queueCount < create_info->requested_transfer_queues)))
 				continue;
 
 			// Check support for window surface
@@ -488,7 +511,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 			check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_surface, &surface_capabilites));
 
-			if ((surface_capabilites.supportedUsageFlags & swapchain_image_usage) != swapchain_image_usage)
+			if ((surface_capabilites.supportedUsageFlags & create_info->swapchain_image_usage) != create_info->swapchain_image_usage)
 				continue;
 
 			// Find a Format that supports the requested Image Usage, preferably VK_FORMAT_B8G8R8A8_SRGB
@@ -502,7 +525,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 			{
 				VkImageFormatProperties format_props;
 
-				if (VK_ERROR_FORMAT_NOT_SUPPORTED == vkGetPhysicalDeviceImageFormatProperties(dev, surface_formats[j].format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, swapchain_image_usage, 0, &format_props))
+				if (VK_ERROR_FORMAT_NOT_SUPPORTED == vkGetPhysicalDeviceImageFormatProperties(dev, surface_formats[j].format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, create_info->swapchain_image_usage, 0, &format_props))
 					continue;
 				
 				if (!format_found || (surface_formats[j].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[j].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR))
@@ -522,22 +545,22 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 			// suitable Device found; Initialize member Variables
 
-			if (requested_general_queues)
+			if (create_info->requested_general_queues)
 			{
 				m_general_queues.family_index = general_queue_index;
-				m_general_queues.cnt = requested_general_queues;
+				m_general_queues.cnt = create_info->requested_general_queues;
 			}
 
-			if (requested_compute_queues)
+			if (create_info->requested_compute_queues)
 			{
 				m_compute_queues.family_index = compute_queue_index;
-				m_compute_queues.cnt = requested_compute_queues;
+				m_compute_queues.cnt = create_info->requested_compute_queues;
 			}
 
-			if (requested_transfer_queues)
+			if (create_info->requested_transfer_queues)
 			{
 				m_transfer_queues.family_index = transfer_queue_index;
-				m_transfer_queues.cnt = requested_transfer_queues;
+				m_transfer_queues.cnt = create_info->requested_transfer_queues;
 
 				m_min_image_transfer_granularity = family_properties[transfer_queue_index].minImageTransferGranularity;
 			}
@@ -572,32 +595,32 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 		uint32_t ci_idx = 0;
 
-		if (requested_general_queues)
+		if (create_info->requested_general_queues)
 		{
 			queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 			queue_cis[ci_idx].queueFamilyIndex = m_general_queues.family_index;
-			queue_cis[ci_idx].queueCount = requested_general_queues + (m_flags.separate_compute_and_general_queue ? 0 : requested_compute_queues);
+			queue_cis[ci_idx].queueCount = create_info->requested_general_queues + (m_flags.separate_compute_and_general_queue ? 0 : create_info->requested_compute_queues);
 
 			queue_cis[ci_idx].pQueuePriorities = general_queue_priorities;
 
 			++ci_idx;
 		}
 
-		if (requested_compute_queues && m_flags.separate_compute_and_general_queue)
+		if (create_info->requested_compute_queues && m_flags.separate_compute_and_general_queue)
 		{
 			queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 			queue_cis[ci_idx].queueFamilyIndex = m_compute_queues.family_index;
-			queue_cis[ci_idx].queueCount = requested_compute_queues;
+			queue_cis[ci_idx].queueCount = create_info->requested_compute_queues;
 			queue_cis[ci_idx].pQueuePriorities = compute_queue_priorities;
 
 			++ci_idx;
 		}
 
-		if (requested_transfer_queues)
+		if (create_info->requested_transfer_queues)
 		{
 			queue_cis[ci_idx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 			queue_cis[ci_idx].queueFamilyIndex = m_transfer_queues.family_index;
-			queue_cis[ci_idx].queueCount = requested_transfer_queues;
+			queue_cis[ci_idx].queueCount = create_info->requested_transfer_queues;
 			queue_cis[ci_idx].pQueuePriorities = transfer_queue_priorities;
 
 			++ci_idx;
@@ -613,26 +636,33 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 		device_ci.ppEnabledLayerNames = s_feats.dev_layers();
 		device_ci.enabledExtensionCount = s_feats.dev_extension_cnt();
 		device_ci.ppEnabledExtensionNames = s_feats.dev_extensions();
-		device_ci.pEnabledFeatures = enabled_device_features ? enabled_device_features : &default_enabled_device_features;
+		if (create_info->enabled_device_features2 == nullptr)
+			device_ci.pEnabledFeatures = &default_enabled_device_features;
+		else if (create_info->requested_api_version == VK_API_VERSION_1_0)
+			device_ci.pEnabledFeatures = &create_info->enabled_device_features2->features;
+		else
+			device_ci.pEnabledFeatures = reinterpret_cast<const VkPhysicalDeviceFeatures*>(&create_info->enabled_device_features2);
 
 		check(vkCreateDevice(m_physical_device, &device_ci, nullptr, &m_device));
 
-		for (uint32_t i = 0; i != requested_general_queues; ++i)
+		for (uint32_t i = 0; i != create_info->requested_general_queues; ++i)
 			vkGetDeviceQueue(m_device, m_general_queues.family_index, i, m_general_queues.queues + i);
 
 		if (m_flags.separate_compute_and_general_queue)
-			for (uint32_t i = 0; i != requested_compute_queues; ++i)
+		{
+			for (uint32_t i = 0; i != create_info->requested_compute_queues; ++i)
 				vkGetDeviceQueue(m_device, m_compute_queues.family_index, i, m_compute_queues.queues + i);
+		}
 		else
 		{
-			for (uint32_t i = 0; i != requested_compute_queues; ++i)
-				vkGetDeviceQueue(m_device, m_compute_queues.family_index, requested_general_queues + i, m_compute_queues.queues + i);
+			for (uint32_t i = 0; i != create_info->requested_compute_queues; ++i)
+				vkGetDeviceQueue(m_device, m_compute_queues.family_index, create_info->requested_general_queues + i, m_compute_queues.queues + i);
 
-			m_compute_queues.offset = requested_general_queues;
+			m_compute_queues.offset = create_info->requested_general_queues;
 		}
 
 
-		for (uint32_t i = 0; i != requested_transfer_queues; ++i)
+		for (uint32_t i = 0; i != create_info->requested_transfer_queues; ++i)
 			vkGetDeviceQueue(m_device, m_transfer_queues.family_index, i, m_transfer_queues.queues + i);
 	}
 
@@ -689,9 +719,9 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 		swapchain_ci.minImageCount = requested_img_cnt;
 		swapchain_ci.imageFormat = m_swapchain_format;
 		swapchain_ci.imageColorSpace = m_swapchain_colorspace;
-		swapchain_ci.imageExtent = { window_width, window_height };
+		swapchain_ci.imageExtent = { create_info->window_width, create_info->window_height };
 		swapchain_ci.imageArrayLayers = 1;
-		swapchain_ci.imageUsage = swapchain_image_usage;
+		swapchain_ci.imageUsage = create_info->swapchain_image_usage;
 		swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swapchain_ci.queueFamilyIndexCount = 0;
 		swapchain_ci.pQueueFamilyIndices = nullptr;
@@ -738,7 +768,7 @@ och::status vulkan_context::create(const char* app_name, uint32_t window_width, 
 
 	// Set allowed swapchain usages
 	{
-		m_image_swapchain_usage = swapchain_image_usage;
+		m_image_swapchain_usage = create_info->swapchain_image_usage;
 	}
 
 	// Get memory heap- and type-indices for device- and staging-memory

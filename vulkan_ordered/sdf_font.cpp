@@ -117,7 +117,13 @@ struct sdf_font
 
 	och::status create(int argc, const char** argv)
 	{
-		check(context.create("Compute Font", 1440, 810, 1, 0, 0));
+		vulkan_context_create_info context_ci{};
+		context_ci.app_name = "Compute Font";
+		context_ci.window_width = 1440;
+		context_ci.window_height = 810;
+
+
+		check(context.create(&context_ci));
 
 		// Create Staging Command Pool
 		{
