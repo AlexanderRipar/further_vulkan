@@ -50,6 +50,10 @@ vec3 calculate_direction(in vec2 invocation, in vec2 render_extent)
 
 void main()
 {
+	const float BASE_DIM_HALF = float(1 << (BASE_DIM_LOG2 - 1));
+
+	const float BASE_DIM = float(1 << BASE_DIM_LOG2);
+
 	// Check if we are inside the image
 
 	ivec2 invocation = ivec2(gl_GlobalInvocationID.xy);
@@ -71,7 +75,7 @@ void main()
 	
 
 
-	vec3 base_offset = vec3(float(1 << (BASE_DIM_LOG2 - 1)));
+	vec3 base_offset = vec3(BASE_DIM_HALF);
 
 
 
@@ -83,15 +87,16 @@ void main()
 
 	// Start a-looping
 
-	while (base_offset.x < float((1 << (BASE_DIM_LOG2)) * LEVEL_CNT))
+	while (base_offset.x < BASE_DIM * float(LEVEL_CNT))
 	{
-		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= float(-1 << (BASE_DIM_LOG2 - 1)))
+		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= -BASE_DIM_HALF)
 		{
 			uint base_value = imageLoad(base_data, ivec3(ray_index + base_offset)).x;
 
 			if (base_value != 0xFFFF)
 			{
 				
+
 				vec3 last_step;
 
 				if(min_time == -1.0)
@@ -103,7 +108,7 @@ void main()
 				else
 					last_step = vec3(0.125, 0.125, 0.5);
 
-				float level_factor = 1.0 - (base_offset.x - float(1 << (BASE_DIM_LOG2 - 1))) * (1.0 / float(LEVEL_CNT << BASE_DIM_LOG2));
+				float level_factor = 1.0 - (base_offset.x - BASE_DIM_HALF) * (1.0 / float(LEVEL_CNT << BASE_DIM_LOG2));
 
 				imageStore(hit_ids, invocation, vec4(last_step * level_factor, 1.0));
 
@@ -126,7 +131,7 @@ void main()
 
 		ray_index = floor(ray_index * 0.5);
 
-		base_offset.x += float(1 << BASE_DIM_LOG2);
+		base_offset.x += BASE_DIM;
 
 		ray_offset = (ray_offset + vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) * ray_coefficient) * 0.5;
 	}
