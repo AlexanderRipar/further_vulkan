@@ -50,7 +50,7 @@ vec3 calculate_direction(in vec2 invocation, in vec2 render_extent)
 
 void main()
 {
-	const int RAY_ACCURACY = 1 << 16;
+	const int RAY_ACCURACY = 1 << 11;
 
 	// Check if we are inside the image
 
@@ -69,16 +69,17 @@ void main()
 
 	ivec3 ray_pos = ivec3(floor(push_data.origin)) + ivec3(1 << (BASE_DIM_LOG2 - 1));
 
-	vec3 ray_coefficient = ray_direction_inv;
-
-	vec3 ray_offset = (vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) - push_data.origin - float(1 << (BASE_DIM_LOG2 - 1))) * ray_coefficient;
-	//ivec3 ray_offset = ivec3((vec3(greaterThanEqual(ray_direction_inv, vec3(0.0))) - push_data.origin + float(1 << (BASE_DIM_LOG2 - 1))) * ray_direction_inv * float(RAY_ACCURACY));
+	ivec3 ray_coefficient = ivec3(ray_direction_inv * float(RAY_ACCURACY));
 
 
 
-	vec3 ray_time;
+	ivec3 ray_offset = ivec3(((vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) - push_data.origin - float(1 << (BASE_DIM_LOG2 - 1))) * float(RAY_ACCURACY))* ray_direction_inv);
 
-	float min_time = -1.0;
+
+
+	ivec3 ray_time;
+
+	int min_time = -1;
 
 
 
@@ -121,7 +122,7 @@ void main()
 
 		++loopcnt;
 
-		ray_time = ray_coefficient * vec3(ray_pos) + ray_offset;
+		ray_time = ray_coefficient * ray_pos + ray_offset;
 
 		min_time = min(min(ray_time.x, ray_time.y), ray_time.z);
 
