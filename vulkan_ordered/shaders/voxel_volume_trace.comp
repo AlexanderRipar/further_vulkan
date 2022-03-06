@@ -78,7 +78,7 @@ void main()
 	ivec3 base_index = ivec3(floor(push_data.origin)) + ivec3(1 << (BASE_DIM_LOG2 - 1));
 
 
-
+	
 	vec3 ray_time;
 
 	float min_time = -1.0;
@@ -152,9 +152,7 @@ void main()
 
 		ray_index = floor(ray_index * 0.5);
 
-		base_index = base_index >> 1;
-
-		base_index += ivec3(1 << (BASE_DIM_LOG2 - 2));
+		base_index = (base_index >> 1) + ivec3(1 << (BASE_DIM_LOG2 - 2));
 
 		level += (1 << BASE_DIM_LOG2);
 
