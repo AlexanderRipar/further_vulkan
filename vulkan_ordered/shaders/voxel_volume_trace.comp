@@ -75,7 +75,7 @@ void main()
 	
 
 
-	vec3 base_offset = vec3(BASE_DIM_HALF);
+	ivec3 base_index = ivec3(floor(push_data.origin)) + ivec3(1 << (BASE_DIM_LOG2 - 1));
 
 
 
@@ -85,15 +85,17 @@ void main()
 
 	int loopcnt = 0;
 
+	int level = 0;
+
 
 
 	// Start a-looping
 
-	while (base_offset.x < BASE_DIM * float(LEVEL_CNT))
+	while (level < BASE_DIM * float(LEVEL_CNT))
 	{
 		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= -BASE_DIM_HALF)
 		{
-			uint base_value = imageLoad(base_data, ivec3(ray_index + base_offset)).x;
+			uint base_value = imageLoad(base_data, base_index + ivec3(level, 0, 0)).x;
 
 			if (loopcnt++ == 1024)
 			{
@@ -104,8 +106,6 @@ void main()
 
 			if (base_value != 0xFFFF)
 			{
-				
-
 				vec3 last_step;
 
 				if(min_time == -1.0)
@@ -117,7 +117,7 @@ void main()
 				else
 					last_step = vec3(0.125, 0.125, 0.5);
 
-				float level_factor = 1.0 - (base_offset.x - BASE_DIM_HALF) * (1.0 / float(LEVEL_CNT << BASE_DIM_LOG2));
+				float level_factor = 1.0 - float(level) * (1.0 / float(LEVEL_CNT << BASE_DIM_LOG2));
 
 				imageStore(hit_ids, invocation, vec4(last_step * level_factor, 1.0));
 
@@ -131,16 +131,32 @@ void main()
 			min_time = min(min(ray_time.x, ray_time.y), ray_time.z);
 
 			if (min_time == ray_time.x)
+			{
+				base_index.x += ray_coefficient.x < 0.0 ? -1 : 1;
+			
 				ray_index.x += ray_coefficient.x < 0.0 ? -1.0 : 1.0;
+			}
 			else if (min_time == ray_time.y)
+			{
+				base_index.y += ray_coefficient.y < 0.0 ? -1 : 1;
+			
 				ray_index.y += ray_coefficient.y < 0.0 ? -1.0 : 1.0;
+			}
 			else
+			{
+				base_index.z += ray_coefficient.z < 0.0 ? -1 : 1;
+			
 				ray_index.z += ray_coefficient.z < 0.0 ? -1.0 : 1.0;
+			}
 		}
 
 		ray_index = floor(ray_index * 0.5);
 
-		base_offset.x += BASE_DIM;
+		base_index = base_index >> 1;
+
+		base_index += ivec3(1 << (BASE_DIM_LOG2 - 2));
+
+		level += (1 << BASE_DIM_LOG2);
 
 		ray_offset = (ray_offset + vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) * ray_coefficient) * 0.5;
 	}
