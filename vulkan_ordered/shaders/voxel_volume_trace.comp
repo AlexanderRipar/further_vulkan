@@ -83,6 +83,8 @@ void main()
 
 	float min_time = -1.0;
 
+	int loopcnt = 0;
+
 
 
 	// Start a-looping
@@ -92,6 +94,13 @@ void main()
 		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= -BASE_DIM_HALF)
 		{
 			uint base_value = imageLoad(base_data, ivec3(ray_index + base_offset)).x;
+
+			if (loopcnt++ == 1024)
+			{
+				imageStore(hit_ids, invocation, vec4(1.0));
+
+				return;
+			}
 
 			if (base_value != 0xFFFF)
 			{
