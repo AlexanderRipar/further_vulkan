@@ -1267,7 +1267,7 @@ struct voxel_volume
 		return {};
 	}
 
-	och::status temp_copyback() noexcept
+	och::status temp_copyback_base_layers() noexcept
 	{
 		VkBuffer cb_buffer;
 
@@ -1341,6 +1341,78 @@ struct voxel_volume
 		vkFreeMemory(ctx.m_device, cb_memory, nullptr);
 
 		vkDestroyCommandPool(ctx.m_device, cb_command_pool, nullptr);
+
+		return {};
+	}
+
+	och::status temp_copyback_brick() noexcept
+	{
+		VkBuffer copyback_buffer;
+
+		VkDeviceMemory copyback_memory;
+
+		check(ctx.create_buffer(copyback_buffer, copyback_memory, BRICK_VOL * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+
+		VkCommandBuffer copyback_command_buffer;
+
+		VkCommandPool copyback_command_pool;
+
+		VkCommandPoolCreateInfo command_pool_ci{};
+		command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		command_pool_ci.pNext = nullptr;
+		command_pool_ci.flags = 0;
+		command_pool_ci.queueFamilyIndex = ctx.m_general_queues.family_index;
+
+		check(vkCreateCommandPool(ctx.m_device, &command_pool_ci, nullptr, &copyback_command_pool));
+
+		check(ctx.begin_onetime_command(copyback_command_buffer, copyback_command_pool));
+
+		VkBufferCopy copy;
+		copy.srcOffset = 0;
+		copy.dstOffset = 0;
+		copy.size = BRICK_VOL * 4;
+
+		vkCmdCopyBuffer(copyback_command_buffer, brick_buffer, copyback_buffer, 1, &copy);
+
+		check(ctx.submit_onetime_command(copyback_command_buffer, copyback_command_pool, ctx.m_general_queues[0]));
+
+		uint32_t* brick;
+
+		check(vkMapMemory(ctx.m_device, copyback_memory, 0, BRICK_VOL * 4, 0, reinterpret_cast<void**>(&brick)));
+
+		uint32_t nonzeros = 0;
+
+		for (uint32_t i = 0; i != BRICK_VOL; ++i)
+			if (brick[i] != 0)
+				++nonzeros;
+
+		och::print("{} voxels nonzero.\n", nonzeros);
+
+		bitmap_file bmp;
+
+		ignore_status(och::delete_file("Brick.bmp"));
+
+		check(bmp.create("Brick.bmp", och::fio::open::fail, BRICK_DIM, BRICK_DIM * (BRICK_DIM + 1) - 1));
+
+		for (uint32_t z = 0; z != BRICK_DIM; ++z)
+		{
+			for (uint32_t y = 0; y != BRICK_DIM; ++y)
+				for (uint32_t x = 0; x != BRICK_DIM; ++x)
+					bmp(x, y + z * (BRICK_DIM + 1)) = brick[x + y * BRICK_DIM + z * BRICK_DIM * BRICK_DIM] ? col::b8g8r8::orange : col::b8g8r8::white;
+
+			for (uint32_t n = 0; n != BRICK_DIM; ++n)
+				bmp(n, (z + 1) * (BRICK_DIM + 1)) = col::b8g8r8::black;
+		}
+
+		bmp.destroy();
+
+		vkUnmapMemory(ctx.m_device, copyback_memory);
+
+		vkDestroyCommandPool(ctx.m_device, copyback_command_pool, nullptr);
+
+		vkDestroyBuffer(ctx.m_device, copyback_buffer, nullptr);
+
+		vkFreeMemory(ctx.m_device, copyback_memory, nullptr);
 
 		return {};
 	}
@@ -1542,7 +1614,7 @@ struct voxel_volume
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		// Allocate Brick buffer
-		check(ctx.create_buffer(brick_buffer, brick_memory, BRICK_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+		check(ctx.create_buffer(brick_buffer, brick_memory, BRICK_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		// Allocate Leaf buffer
 		check(ctx.create_buffer(leaf_buffer, leaf_memory, LEAF_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
@@ -1776,8 +1848,6 @@ struct voxel_volume
 			}
 		}
 
-		// check(temp_populate_multi_layer());
-		
 		check(temp_populate_bricks());
 
 		return {};

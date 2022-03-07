@@ -126,7 +126,7 @@ void main()
 	if(brick_index == 0xFFFF || brick_index == 0xFFFE)
 		return;
 
-	brick_index = brick_index * (1 << (BRICK_DIM_LOG2 * 3)) + gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * (1 << BRICK_DIM_LOG2) + gl_GlobalInvocationID.z * (1 << (BRICK_DIM_LOG2 * 2));
+	brick_index = brick_index * (1 << (BRICK_DIM_LOG2 * 3)) + (gl_GlobalInvocationID.x & ((1 << BRICK_DIM_LOG2) - 1)) + (gl_GlobalInvocationID.y & ((1 << BRICK_DIM_LOG2) - 1)) * (1 << BRICK_DIM_LOG2) + (gl_GlobalInvocationID.z & ((1 << BRICK_DIM_LOG2) - 1)) * (1 << (BRICK_DIM_LOG2 * 2));
 
 	float level_scale = float(1 << (gl_GlobalInvocationID.x >> (BASE_DIM_LOG2 + BRICK_DIM_LOG2)));
 	
