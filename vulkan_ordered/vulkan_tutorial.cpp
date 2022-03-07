@@ -1,7 +1,5 @@
 #include "vulkan_tutorial.h"
 
-#include "directory_constants.h"
-
 #define TEMP_STATUS_MACRO to_status(och::status(1, och::error_type::och))
 
 #define GLFW_INCLUDE_VULKAN
@@ -199,9 +197,9 @@ struct vulkan_tutorial
 	{
 		och::print("Starting initialization\n\n");
 
-		const char* model_path = OCH_DIR "models/viking_room.obj";
+		const char* model_path = "models/viking_room.obj";
 
-		const char* texture_path = OCH_DIR "textures/viking_room.bmp";
+		const char* texture_path = "textures/viking_room.bmp";
 
 		if (argc >= 3)
 			model_path = argv[2];
@@ -365,11 +363,11 @@ struct vulkan_tutorial
 	{
 		VkShaderModule vert_shader_module;
 
-		check(create_shader_module_from_file(OCH_DIR "shaders/tutorial.vert.spv", vert_shader_module));
+		check(create_shader_module_from_file("shaders/tutorial.vert.spv", vert_shader_module));
 
 		VkShaderModule frag_shader_module;
 
-		check(create_shader_module_from_file(OCH_DIR "shaders/tutorial.frag.spv", frag_shader_module));
+		check(create_shader_module_from_file("shaders/tutorial.frag.spv", frag_shader_module));
 
 		VkPipelineShaderStageCreateInfo shader_info[2]{};
 		shader_info[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

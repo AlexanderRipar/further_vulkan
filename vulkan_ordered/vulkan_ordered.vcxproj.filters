@@ -172,9 +172,6 @@
     <ClInclude Include="help.h">
       <Filter>samples\help</Filter>
     </ClInclude>
-    <ClInclude Include="directory_constants.h">
-      <Filter>helpers</Filter>
-    </ClInclude>
     <ClInclude Include="gpu_info.h">
       <Filter>samples\gpu_info</Filter>
     </ClInclude>

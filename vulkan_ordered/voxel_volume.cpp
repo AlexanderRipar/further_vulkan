@@ -1,7 +1,6 @@
 #include "voxel_volume.h"
 
 #include "vulkan_base.h"
-#include "directory_constants.h"
 #include "bitmap.h"
 
 #include "och_matmath.h"
@@ -23,7 +22,7 @@ bool voxel_volume_physical_device_suitable_callback(VkPhysicalDevice device) noe
 	if ((subgroup_props.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) == 0)
 		return false;
 
-	if ((subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT) == 0)
+	if ((subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT) == 0)
 		return false;
 
 	return true;
@@ -156,19 +155,6 @@ struct voxel_volume
 
 	och::status temp_populate_bricks() noexcept
 	{
-		/* 
-		TODO
-
-		for all base levels
-			for all bricks
-				generate brick data into buffer.
-				if buffer is 'empty'
-					set base entry to empty
-				else
-					copy buffer to brick buffer
-					set base entry to point to brick
-		*/ 
-
 		struct ce_and_fb_push_constant_data_t
 		{
 			och::vec3 offset;
@@ -284,9 +270,9 @@ struct voxel_volume
 			VkPushConstantRange* push_constant_ranges[3]{ &checkempty_and_fillbricks_push_constant_range, nullptr, &checkempty_and_fillbricks_push_constant_range };
 
 			const char* shader_module_names[3]{
-				OCH_DIR "shaders\\voxel_volume_init_checkempty.comp.spv",
-				OCH_DIR "shaders\\voxel_volume_init_assignindex.comp.spv",
-				OCH_DIR "shaders\\voxel_volume_init_fillbricks.comp.spv",
+				"shaders\\voxel_volume_init_checkempty.comp.spv",
+				"shaders\\voxel_volume_init_assignindex.comp.spv",
+				"shaders\\voxel_volume_init_fillbricks.comp.spv",
 			};
 
 			struct 
@@ -783,7 +769,7 @@ struct voxel_volume
 
 			check(vkCreatePipelineLayout(ctx.m_device, &pipeline_layout_ci, nullptr, &pop_pipeline_layout));
 
-			check(ctx.load_shader_module_file(pop_shader_module, OCH_DIR "shaders\\simplex3d_layered.comp.spv"));
+			check(ctx.load_shader_module_file(pop_shader_module, "shaders\\simplex3d_layered.comp.spv"));
 
 			struct
 			{
@@ -1021,7 +1007,7 @@ struct voxel_volume
 
 			check(vkCreatePipelineLayout(ctx.m_device, &pipeline_layout_ci, nullptr, &pop_pipeline_layout));
 
-			check(ctx.load_shader_module_file(pop_shader_module, OCH_DIR "shaders\\simplex3d.comp.spv"));
+			check(ctx.load_shader_module_file(pop_shader_module, "shaders\\simplex3d.comp.spv"));
 
 			struct { uint32_t x, y, z; } group_size{ POPULATE_GROUP_SIZE_X, POPULATE_GROUP_SIZE_Y, POPULATE_GROUP_SIZE_Z };
 
@@ -1566,7 +1552,7 @@ struct voxel_volume
 
 		// Create Pipeline
 		{
-			check(ctx.load_shader_module_file(trace_shader_module, OCH_DIR "shaders\\voxel_volume_trace.comp.spv"));
+			check(ctx.load_shader_module_file(trace_shader_module, "shaders\\voxel_volume_trace.comp.spv"));
 
 			struct
 			{

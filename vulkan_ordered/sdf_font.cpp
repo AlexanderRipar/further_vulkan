@@ -1,7 +1,5 @@
 #include "sdf_font.h"
 
-#include "directory_constants.h"
-
 #include <cmath>
 
 #include "vulkan_base.h"
@@ -211,9 +209,9 @@ struct sdf_font
 
 		// Create Graphics Pipeline
 		{
-			check(context.load_shader_module_file(vert_shader_module, OCH_DIR "shaders/sdf_font.vert.spv"));
+			check(context.load_shader_module_file(vert_shader_module, "shaders/sdf_font.vert.spv"));
 
-			check(context.load_shader_module_file(frag_shader_module, OCH_DIR "shaders/sdf_font.frag.spv"));
+			check(context.load_shader_module_file(frag_shader_module, "shaders/sdf_font.frag.spv"));
 
 			VkDescriptorSetLayoutBinding descriptor_binding{};
 			// Font SDF-Atlas
