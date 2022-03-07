@@ -95,7 +95,7 @@ void main()
 	{
 		while (max(max(ray_index.x, ray_index.y), ray_index.z) < float(1 << (BASE_DIM_LOG2 - 1)) && min(min(ray_index.x, ray_index.y), ray_index.z) >= -BASE_DIM_HALF)
 		{
-			uint base_value = imageLoad(base_data, base_index + ivec3(level, 0, 0)).x;
+			uint base_value = imageLoad(base_data, base_index).x;
 
 			if (loopcnt++ == 1024)
 			{
@@ -152,11 +152,15 @@ void main()
 
 		ray_index = floor(ray_index * 0.5);
 
+		base_index.x -= level;
+
 		base_index = (base_index >> 1) + ivec3(1 << (BASE_DIM_LOG2 - 2));
 
 		level += (1 << BASE_DIM_LOG2);
 
 		ray_offset = (ray_offset + vec3(greaterThanEqual(ray_coefficient, vec3(0.0))) * ray_coefficient) * 0.5;
+
+		base_index.x += level;
 	}
 
 	imageStore(hit_ids, invocation, vec4(0.0, 0.1, 0.2, 1.0));
