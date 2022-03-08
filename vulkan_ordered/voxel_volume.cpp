@@ -65,7 +65,7 @@ struct voxel_volume
 
 	static constexpr float BRICK_OCCUPANCY = 0.5F;
 
-	static constexpr uint32_t OCCUPIED_BRICKS = static_cast<uint32_t>(BASE_VOL * LEVEL_CNT * BASE_OCCUPANCY);
+	static constexpr uint32_t OCCUPIED_BRICKS = 1 << 16; //static_cast<uint32_t>(BASE_VOL * LEVEL_CNT * BASE_OCCUPANCY);
 
 	static constexpr uint32_t BRICK_BYTES = OCCUPIED_BRICKS * BRICK_VOL * sizeof(brick_elem_t);
 
@@ -84,6 +84,10 @@ struct voxel_volume
 	och::vec3 input_rotation{ 0.0F, 0.0F, 0.0F };
 
 	och::vec3 input_position{ 0.0F, 0.0F, 0.0F };
+
+	float input_rotation_delta{ 1.0F / 128.0F };
+
+	float input_position_delta{ 1.0F / 32.0F };
 
 
 
@@ -1956,37 +1960,50 @@ struct voxel_volume
 		push_data.direction_rotation[1] = { rotation(0, 1), rotation(1, 1), rotation(2, 1), 0.0F };
 		push_data.direction_rotation[2] = { rotation(0, 2), rotation(1, 2), rotation(2, 2), 0.0F };
 
-		static constexpr float rot_delta = 1.0F / 128.0F, pos_delta = 1.0F/32.0F;
-
 		if (ctx.get_keycode(och::vk::arrow_up))
-			input_rotation.x -= rot_delta;
+			input_rotation.x -= input_rotation_delta;
 
 		if (ctx.get_keycode(och::vk::arrow_down))
-			input_rotation.x += rot_delta;
+			input_rotation.x += input_rotation_delta;
 
 		if (ctx.get_keycode(och::vk::arrow_left))
-			input_rotation.y += rot_delta;
+			input_rotation.y += input_rotation_delta;
 
 		if (ctx.get_keycode(och::vk::arrow_right))
-			input_rotation.y -= rot_delta;
+			input_rotation.y -= input_rotation_delta;
 
 		if (ctx.get_keycode(och::vk::key_w))
-			input_position += rotation * och::vec3(0.0F, 0.0F, -pos_delta);
+			input_position += rotation * och::vec3(0.0F, 0.0F, -input_position_delta);
 
 		if (ctx.get_keycode(och::vk::key_s))
-		input_position += rotation * och::vec3(0.0F, 0.0F, pos_delta);
+		input_position += rotation * och::vec3(0.0F, 0.0F, input_position_delta);
 
 		if (ctx.get_keycode(och::vk::key_a))
-			input_position += rotation * och::vec3(-pos_delta, 0.0F, 0.0F);
+			input_position += rotation * och::vec3(-input_position_delta, 0.0F, 0.0F);
 
 		if (ctx.get_keycode(och::vk::key_d))
-			input_position += rotation * och::vec3(pos_delta, 0.0F, 0.0F);
+			input_position += rotation * och::vec3(input_position_delta, 0.0F, 0.0F);
 
 		if (ctx.get_keycode(och::vk::space))
-			input_position += rotation * och::vec3(0.0F, -pos_delta, 0.0F);
+			input_position += rotation * och::vec3(0.0F, -input_position_delta, 0.0F);
 
 		if (ctx.get_keycode(och::vk::shift))
-			input_position += rotation * och::vec3(0.0F, pos_delta, 0.0F);
+			input_position += rotation * och::vec3(0.0F, input_position_delta, 0.0F);
+
+		if (ctx.get_keycode(och::vk::key_x))
+			input_position_delta += 1.0 / 64.0;
+
+		if(ctx.get_keycode(och::vk::key_y))
+			input_position_delta -= 1.0 / 64.0;
+
+		if (ctx.get_keycode(och::vk::key_m))
+			input_rotation_delta += 1.0 / 1024.0;
+
+		if (ctx.get_keycode(och::vk::key_n))
+			input_rotation_delta -= 1.0 / 1024.0;
+
+		if (ctx.get_keycode(och::vk::key_r))
+			input_position = { 0.0, 0.0, 0.0 };
 
 		vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push_constant_data_t), &push_data);
 
