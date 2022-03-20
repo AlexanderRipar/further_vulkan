@@ -368,7 +368,7 @@ och::status vulkan_context::create(const vulkan_context_create_info* create_info
 		app_info.apiVersion = create_info->requested_api_version;
 
 		bool supports_extensions;
-		check(s_feats.check_instance_support(supports_extensions));
+		check(create_info->required_features_and_extensions.check_instance_support(supports_extensions));
 
 		if (!supports_extensions)
 			return to_status(VK_ERROR_EXTENSION_NOT_PRESENT);
@@ -376,11 +376,11 @@ och::status vulkan_context::create(const vulkan_context_create_info* create_info
 		VkInstanceCreateInfo instance_ci{};
 		instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		instance_ci.pNext = &messenger_ci;
-		instance_ci.enabledLayerCount = s_feats.inst_layer_cnt();
-		instance_ci.ppEnabledLayerNames = s_feats.inst_layers();
+		instance_ci.enabledLayerCount = create_info->required_features_and_extensions.inst_layer_cnt();
+		instance_ci.ppEnabledLayerNames = create_info->required_features_and_extensions.inst_layers();
 		instance_ci.pApplicationInfo = &app_info;
-		instance_ci.enabledExtensionCount = s_feats.inst_extension_cnt();
-		instance_ci.ppEnabledExtensionNames = s_feats.inst_extensions();
+		instance_ci.enabledExtensionCount = create_info->required_features_and_extensions.inst_extension_cnt();
+		instance_ci.ppEnabledExtensionNames = create_info->required_features_and_extensions.inst_extensions();
 
 		check(vkCreateInstance(&instance_ci, nullptr, &m_instance));
 	}
@@ -436,17 +436,17 @@ och::status vulkan_context::create(const vulkan_context_create_info* create_info
 			if (properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				continue;
 
-			// Check support for client-specific requirements
-
-			if (create_info->physical_device_suitable_callback != nullptr && create_info->physical_device_suitable_callback(dev) == false)
-				continue;
-
 			// Check support for required extensions and layers
 
 			bool supports_extensions;
-			check(s_feats.check_device_support(dev, supports_extensions));
+			check(create_info->required_features_and_extensions.check_device_support(dev, supports_extensions));
+
+			// Check support for client-specific requirements
 
 			if (!supports_extensions)
+				continue;
+
+			if (create_info->physical_device_suitable_callback != nullptr && create_info->physical_device_suitable_callback(dev) == false)
 				continue;
 
 			// Check queue families
@@ -570,7 +570,7 @@ och::status vulkan_context::create(const vulkan_context_create_info* create_info
 			goto DEVICE_SELECTED;
 		}
 
-		return to_status(VK_ERROR_UNKNOWN);
+		return to_status(och::error::not_found);
 
 	DEVICE_SELECTED:;
 	}
@@ -632,17 +632,18 @@ och::status vulkan_context::create(const vulkan_context_create_info* create_info
 		device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		device_ci.queueCreateInfoCount = ci_idx;
 		device_ci.pQueueCreateInfos = queue_cis;
-		device_ci.enabledLayerCount = s_feats.dev_layer_cnt();
-		device_ci.ppEnabledLayerNames = s_feats.dev_layers();
-		device_ci.enabledExtensionCount = s_feats.dev_extension_cnt();
-		device_ci.ppEnabledExtensionNames = s_feats.dev_extensions();
+		device_ci.enabledLayerCount = create_info->required_features_and_extensions.dev_layer_cnt();
+		device_ci.ppEnabledLayerNames = create_info->required_features_and_extensions.dev_layers();
+		device_ci.enabledExtensionCount = create_info->required_features_and_extensions.dev_extension_cnt();
+		device_ci.ppEnabledExtensionNames = create_info->required_features_and_extensions.dev_extensions();
+
 		if (create_info->enabled_device_features2 == nullptr)
 			device_ci.pEnabledFeatures = &default_enabled_device_features;
 		else if (create_info->requested_api_version == VK_API_VERSION_1_0)
 			device_ci.pEnabledFeatures = &create_info->enabled_device_features2->features;
 		else
-			device_ci.pEnabledFeatures = reinterpret_cast<const VkPhysicalDeviceFeatures*>(&create_info->enabled_device_features2);
-
+			device_ci.pNext = create_info->enabled_device_features2;
+		
 		check(vkCreateDevice(m_physical_device, &device_ci, nullptr, &m_device));
 
 		for (uint32_t i = 0; i != create_info->requested_general_queues; ++i)

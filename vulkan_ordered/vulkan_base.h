@@ -52,7 +52,7 @@ size_t find_aligned_size(size_t elem_size, size_t alignment) noexcept;
 
 
 
-struct required_feature_list
+struct required_extension_layer_list
 {
 	static constexpr uint32_t max_cnt = 8;
 
@@ -266,7 +266,11 @@ struct queue_family_info
 	const VkQueue& operator[](size_t n) const noexcept { return queues[n - offset]; }
 };
 
+
+
 using physical_device_suitable_callback_fn = bool (*) (const VkPhysicalDevice physical_device) noexcept;
+
+
 
 struct vulkan_context_create_info
 {
@@ -280,15 +284,16 @@ struct vulkan_context_create_info
 	uint32_t requested_api_version = VK_API_VERSION_1_0;
 	bool allow_compute_graphics_queue_merge = true;
 	bool allow_window_resizing = true;
-	const VkPhysicalDeviceFeatures2* enabled_device_features2;
+	const VkPhysicalDeviceFeatures2* enabled_device_features2 = nullptr;
 	physical_device_suitable_callback_fn physical_device_suitable_callback = nullptr;
 	och::iohandle debug_output_handle = och::get_stdout();
+	required_extension_layer_list required_features_and_extensions{};
 };
+
+
 
 struct vulkan_context
 {
-	static inline required_feature_list s_feats;
-
 	static inline const wchar_t* WINDOW_CLASS_NAME = L"och_vulkan_context_window_class";
 
 	static constexpr uint32_t MAX_SWAPCHAIN_IMAGE_CNT = 4;
