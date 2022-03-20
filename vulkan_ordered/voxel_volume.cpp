@@ -13,7 +13,7 @@ bool voxel_volume_physical_device_suitable_callback(VkPhysicalDevice device) noe
 	subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
 	subgroup_props.pNext = nullptr;
 
-	VkPhysicalDeviceProperties2 props2;
+	VkPhysicalDeviceProperties2 props2{};
 	props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 	props2.pNext = &subgroup_props;
 
@@ -23,6 +23,21 @@ bool voxel_volume_physical_device_suitable_callback(VkPhysicalDevice device) noe
 		return false;
 
 	if ((subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT) == 0)
+		return false;
+
+
+
+	VkPhysicalDevice16BitStorageFeatures physical_device_16_bit_storage_feats{};
+	physical_device_16_bit_storage_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+	physical_device_16_bit_storage_feats.pNext = nullptr;
+
+	VkPhysicalDeviceFeatures2 feats2{};
+	feats2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	feats2.pNext = &physical_device_16_bit_storage_feats;
+
+	vkGetPhysicalDeviceFeatures2(device, &feats2);
+
+	if (physical_device_16_bit_storage_feats.storageBuffer16BitAccess == VK_FALSE)
 		return false;
 
 	return true;
@@ -41,37 +56,37 @@ struct voxel_volume
 
 
 
-	using base_elem_t = uint16_t;
+	using base_elem_t = uint32_t;
 
-	using brick_elem_t = uint32_t;
+	using brick_elem_t = uint16_t;
 
 	using leaf_elem_t = uint16_t;
 
-	static constexpr uint32_t LEVEL_CNT = 3;
+	static constexpr uint64_t LEVEL_CNT = 5;
 
-	static constexpr uint32_t BASE_DIM_LOG2 = 6;
+	static constexpr uint64_t BASE_DIM_LOG2 = 6;
 
-	static constexpr uint32_t BRICK_DIM_LOG2 = 4;
+	static constexpr uint64_t BRICK_DIM_LOG2 = 4;
 
-	static constexpr uint32_t BASE_DIM = 1 << BASE_DIM_LOG2;
+	static constexpr uint64_t BASE_DIM = 1 << BASE_DIM_LOG2;
 
-	static constexpr uint32_t BRICK_DIM = 1 << BRICK_DIM_LOG2;
+	static constexpr uint64_t BRICK_DIM = 1 << BRICK_DIM_LOG2;
 
-	static constexpr uint32_t BASE_VOL = BASE_DIM * BASE_DIM * BASE_DIM;
+	static constexpr uint64_t BASE_VOL = BASE_DIM * BASE_DIM * BASE_DIM;
 
-	static constexpr uint32_t BRICK_VOL = BRICK_DIM * BRICK_DIM * BRICK_DIM;
+	static constexpr uint64_t BRICK_VOL = BRICK_DIM * BRICK_DIM * BRICK_DIM;
 
 	static constexpr float BASE_OCCUPANCY = 0.0625F;
 
 	static constexpr float BRICK_OCCUPANCY = 0.5F;
 
-	static constexpr uint32_t OCCUPIED_BRICKS = 1 << 16; //static_cast<uint32_t>(BASE_VOL * LEVEL_CNT * BASE_OCCUPANCY);
+	static constexpr uint64_t OCCUPIED_BRICKS = 3 << 17; // static_cast<uint32_t>(BASE_VOL * LEVEL_CNT * BASE_OCCUPANCY);
 
-	static constexpr uint32_t BRICK_BYTES = OCCUPIED_BRICKS * BRICK_VOL * sizeof(brick_elem_t);
+	static constexpr uint64_t BRICK_BYTES = OCCUPIED_BRICKS * BRICK_VOL * sizeof(brick_elem_t);
 
-	static constexpr uint32_t OCCUPIED_LEAVES = static_cast<uint32_t>(OCCUPIED_BRICKS * BRICK_VOL * BRICK_OCCUPANCY);
+	static constexpr uint64_t OCCUPIED_LEAVES = 1 << 20; // static_cast<uint32_t>(OCCUPIED_BRICKS * BRICK_VOL * BRICK_OCCUPANCY);
 
-	static constexpr uint32_t LEAF_BYTES = OCCUPIED_LEAVES * 8 * sizeof(leaf_elem_t);
+	static constexpr uint64_t LEAF_BYTES = OCCUPIED_LEAVES * 8 * sizeof(leaf_elem_t);
 
 
 
@@ -91,57 +106,57 @@ struct voxel_volume
 
 
 
-	vulkan_context ctx;
+	vulkan_context ctx{};
 
 
 
-	VkImage base_image;
+	VkImage base_image{};
 
-	VkImageView base_image_view;
+	VkImageView base_image_view{};
 
-	VkDeviceMemory base_image_memory;
+	VkDeviceMemory base_image_memory{};
 
-	VkBuffer brick_buffer;
+	VkBuffer brick_buffer{};
 
-	VkDeviceMemory brick_memory;
+	VkDeviceMemory brick_memory{};
 
-	VkBuffer leaf_buffer;
+	VkBuffer leaf_buffer{};
 
-	VkDeviceMemory leaf_memory;
+	VkDeviceMemory leaf_memory{};
 
 
 
-	// VkImage hit_index_images[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	// VkImage hit_index_images[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 	// 
-	// VkImageView hit_index_image_views[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	// VkImageView hit_index_image_views[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 	// 
-	// VkDeviceMemory hit_index_memory;
+	// VkDeviceMemory hit_index_memory{};
 
-	VkImage hit_times_images[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	VkImage hit_times_images[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
-	VkImageView hit_times_image_views[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
+	VkImageView hit_times_image_views[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
-	VkDeviceMemory hit_times_memory;
-
-
-
-	VkDescriptorPool descriptor_pool;
-
-	VkDescriptorSet descriptor_sets[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT];
-
-	VkCommandPool command_pool;
-
-	VkCommandBuffer command_buffers[MAX_FRAMES_INFLIGHT];
+	VkDeviceMemory hit_times_memory{};
 
 
 
-	VkShaderModule trace_shader_module;
+	VkDescriptorPool descriptor_pool{};
 
-	VkDescriptorSetLayout descriptor_set_layout;
+	VkDescriptorSet descriptor_sets[vulkan_context::MAX_SWAPCHAIN_IMAGE_CNT]{};
 
-	VkPipelineLayout pipeline_layout;
+	VkCommandPool command_pool{};
 
-	VkPipeline pipeline;
+	VkCommandBuffer command_buffers[MAX_FRAMES_INFLIGHT]{};
+
+
+
+	VkShaderModule trace_shader_module{};
+
+	VkDescriptorSetLayout descriptor_set_layout{};
+
+	VkPipelineLayout pipeline_layout{};
+
+	VkPipeline pipeline{};
 
 
 
@@ -520,6 +535,8 @@ struct voxel_volume
 			check(vkAllocateCommandBuffers(ctx.m_device, &command_buffer_ai, &pop_command_buffer));
 		}
 
+		och::time submit_time;
+
 		// Submit Command Buffer
 		{
 			VkCommandBufferBeginInfo command_buffer_bi{};
@@ -672,16 +689,20 @@ struct voxel_volume
 			submit_info.signalSemaphoreCount = 0;
 			submit_info.pSignalSemaphores = nullptr;
 
+			submit_time = och::time::now();
+
 			check(vkQueueSubmit(ctx.m_general_queues[0], 1, &submit_info, nullptr));
 		}
 
 		check(vkQueueWaitIdle(ctx.m_general_queues[0]));
 
+		och::print("Time taken on GPU: {}\n", och::time::now() - submit_time);
+
 		uint32_t* staging_ptr;
 
 		check(vkMapMemory(ctx.m_device, pop_atomic_index_memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&staging_ptr)));
 
-		och::print("Brick IDs used: {} / {} ({} remaining)\n", *staging_ptr, 0xFFFE, 0xFFFE - *staging_ptr);
+		och::print("Brick IDs used: {} / {} ({} remaining)\n", *staging_ptr, static_cast<uint32_t>(OCCUPIED_BRICKS), static_cast<int32_t>(OCCUPIED_BRICKS - *staging_ptr));
 
 		vkUnmapMemory(ctx.m_device, pop_atomic_index_memory);
 
@@ -1596,6 +1617,17 @@ struct voxel_volume
 
 	och::status create() noexcept
 	{
+		och::print("Base MB: {}\nBrick MB: {}\nLeaf MB: {}\n", (BASE_VOL * sizeof(base_elem_t)) / (1024 * 1024), BRICK_BYTES / (1024 * 1024), LEAF_BYTES / (1024 * 1024));
+
+		VkPhysicalDevice16BitStorageFeatures physical_device_16_bit_storage_feats{};
+		physical_device_16_bit_storage_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+		physical_device_16_bit_storage_feats.pNext = nullptr;
+		physical_device_16_bit_storage_feats.storageBuffer16BitAccess = VK_TRUE;
+
+		VkPhysicalDeviceFeatures2 physical_device_feats{};
+		physical_device_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		physical_device_feats.pNext = &physical_device_16_bit_storage_feats;
+
 		vulkan_context_create_info context_ci{};
 		context_ci.app_name = "Voxel Volume";
 		context_ci.window_width = 1440;
@@ -1603,6 +1635,7 @@ struct voxel_volume
 		context_ci.requested_api_version = VK_API_VERSION_1_1;
 		context_ci.swapchain_image_usage = VK_IMAGE_USAGE_STORAGE_BIT;
 		context_ci.physical_device_suitable_callback = voxel_volume_physical_device_suitable_callback;
+		context_ci.enabled_device_features2 = &physical_device_feats;
 
 		check(ctx.create(&context_ci));
 
@@ -1613,8 +1646,8 @@ struct voxel_volume
 			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 			VK_IMAGE_TYPE_3D, 
 			VK_IMAGE_VIEW_TYPE_3D, 
-			VK_FORMAT_R16_UINT, 
-			VK_FORMAT_R16_UINT, 
+			VK_FORMAT_R32_UINT, 
+			VK_FORMAT_R32_UINT, 
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
 		// Allocate Brick buffer
@@ -1859,6 +1892,9 @@ struct voxel_volume
 
 	void destroy() noexcept
 	{
+		if (ctx.m_device == nullptr)
+			return;
+
 		if (vkDeviceWaitIdle(ctx.m_device) != VK_SUCCESS)
 			return;
 
