@@ -1,6 +1,7 @@
 #version 450
 
-#extension GL_KHR_shader_subgroup_ballot: enable
+#extension GL_KHR_shader_subgroup_ballot : enable
+#extension GL_EXT_shader_16bit_storage   : enable
 
 layout (local_size_x_id = 1) in;
 layout (local_size_y_id = 2) in;
@@ -10,10 +11,10 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 layout (constant_id = 4) const uint BASE_DIM_LOG2 = 6;
 layout (constant_id = 5) const uint BRICK_DIM_LOG2 = 4;
 
-layout (binding = 0, r16ui) uniform readonly uimage3D base_image;
+layout (binding = 0, r32ui) uniform readonly uimage3D base_image;
 
 layout (binding = 1) writeonly buffer Brick_buffer {
-	uint elems[];
+	uint16_t elems[];
 } bricks;
 
 layout (push_constant) uniform Push_data
@@ -136,5 +137,5 @@ void main()
 	
 	float simplex_val = simplex3d(pos);
 
-	bricks.elems[brick_index] = simplex_val > push_data.cutoff ? 1u : 0u;
+	bricks.elems[brick_index] = uint16_t(simplex_val > push_data.cutoff ? 1 : 0);
 }

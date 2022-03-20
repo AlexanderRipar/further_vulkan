@@ -1,6 +1,6 @@
 #version 450
-#extension GL_ARB_separate_shader_objects : enable
 
+#extension GL_EXT_shader_16bit_storage : enable
 
 
 
@@ -17,10 +17,10 @@ layout (set = 0, binding = 0, rgba8) uniform writeonly image2D hit_ids;
 
 layout (set = 0, binding = 1, r32f) uniform writeonly image2D hit_times;
 
-layout (set = 0, binding = 2, r16ui) uniform readonly uimage3D base_data;
+layout (set = 0, binding = 2, r32ui) uniform readonly uimage3D base_data;
 
 layout (set = 0, binding = 3) readonly buffer Bricks {
-	uint elems[];
+	uint16_t elems[];
 } bricks;
 
 layout (set = 0, binding = 4) readonly buffer Leaves {
@@ -161,7 +161,7 @@ void main()
 				{
 					++steps;
 
-					uint brick_value = bricks.elems[brick_buffer_begin + brick_buffer_offset];
+					uint brick_value = uint(bricks.elems[brick_buffer_begin + brick_buffer_offset]);
 
 					if (loopcnt++ == 1024)
 					{
@@ -170,7 +170,7 @@ void main()
 						return;
 					}
 
-					if (brick_value != 0)
+					if (brick_value != 0u)
 					{
 						store_result(invocation, ray_time, min_time, level);
 
